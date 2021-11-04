@@ -1,0 +1,94 @@
+#!/bin/bash
+minimum_cluster_size=3
+similarity=0.98
+threads=1
+
+print_help()
+{
+    fold --spaces <<EOF
+Usage: find-large-clusters [OPTIONS...]
+Fast and approximate method for finding large clusters. It first clusters a small subset of sequences, then uses the centers of the clusters that are larger than the specified threshold to recruit from the rest of the sequences. Note that this method does not cluster all of the sequences. Hopefully, however, we will find most the of large clusters.
+
+  -m SIZE            The minimum size of the clusters whose centers are
+                     uesd in the second phase (default=3)
+  -s SIZE            The size of set of sample sequences for finding the
+                     centers of large clusters (default=n^0.8)
+  -r SIMILARITY      Set similarity between cluster center and cluster
+                     sequences (default=0.98)
+  -t THREADS         Set the number of threads to use
+  -a                 Produce multiple sequence alignment for each cluster
+  -v                 Print verbose messages to standard error
+  -h                 Give this help list
+
+The sequences to be clustered are read from the STDIN. The cluster centers are written to STDOUT. Messages are written to STDERR.
+EOF
+}
+
+while getopts "m:s:r:t:avh" option
+do
+    case $option in
+	m) minimum_cluster_size="$OPTARG";;
+	s) sample_count="$OPTARG";;
+	r) similarity="$OPTARG";;
+  t) threads="$OPTARG";;
+	a) multiple_alignment="--multiple-alignment";;
+	v) verbose=0;;
+	h) print_help; exit 0;;
+	[?]) print_help; exit 1;;
+    esac
+done
+
+print_message()
+{
+    if [ $verbose ]
+    then
+	echo "`date +%T` $1" >&2
+    fi
+}
+
+dnaclust_path="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+tempdir=`mktemp -d -p .`
+#trap "rm -fr $tempdir" EXIT
+
+sequences_sorted=`mktemp -p $tempdir`
+# Reads the sequences from STDIN.
+print_message "Reading and sorting the input sequences."
+"$dnaclust_path/fastasort" --random-shuffle > $sequences_sorted 
+
+input_count=`grep -c '^>' $sequences_sorted`
+if [ $input_count -le 1 ]
+then
+    echo "ERROR: Input sequences must contain more than one sequence." >&2
+    exit 1
+fi
+
+if [ -z $sample_count ]
+then
+    sample_count_float=`echo "e(l($input_count)*0.8)" | bc -l`
+    sample_count=`echo "($sample_count_float * 2 + 1) / 2" | bc`
+fi
+
+sample_lines=`awk --assign=count=$sample_count '/^>/{if (++n > count) {print FNR - 1; exit}}' $sequences_sorted`
+
+
+print_message "Splitting $input_count input sequences into a sample of size $sample_count, and the rest."
+sequences_sorted_head=`mktemp -p $tempdir`
+head -n $sample_lines $sequences_sorted > $sequences_sorted_head
+
+large_clusters=`mktemp -p $tempdir`
+print_message "Clustering the set of sample sequences, and extracting centers of large clusters."
+"$dnaclust_path/dnaclust" -s $similarity -t $threads -i $sequences_sorted_head \
+    | awk --assign=minimum=$minimum_cluster_size '{if (NF >= minimum) print $0}' > $large_clusters
+
+sequences_sorted_head_large_centers=`mktemp -p $tempdir`
+"$dnaclust_path/fastaselect" -c -f $sequences_sorted_head < $large_clusters > $sequences_sorted_head_large_centers
+
+sequences_minus_centers=`mktemp -p $tempdir`
+"$dnaclust_path/fastaselect" --everything-except -f $sequences_sorted < $large_clusters > $sequences_minus_centers
+
+centers_count=`grep -c '^>' $sequences_sorted_head_large_centers`
+print_message "Recruiting from the rest of the sequences, using $centers_count centers."
+"$dnaclust_path/dnaclust" -s $similarity -t $threads $multiple_alignment --no-k-mer-filter -i $sequences_minus_centers -p $sequences_sorted_head_large_centers -r
+
+print_message "Done."

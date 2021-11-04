@@ -1,0 +1,389 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN"
+"http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+
+<!--
+
+`xsltproc -''-nonet \
+          -''-param man.charmap.use.subset "0" \
+          -''-param make.year.ranges "1" \
+          -''-param make.single.year.ranges "1" \
+          /usr/share/xml/docbook/stylesheet/nwalsh/manpages/docbook.xsl \
+          manpage.xml'
+
+A manual page <package>.<section> will be generated. You may view the
+manual page with: nroff -man <package>.<section> | less'. A typical entry
+in a Makefile or Makefile.am is:
+
+DB2MAN = /usr/share/sgml/docbook/stylesheet/xsl/nwalsh/manpages/docbook.xsl
+XP     = xsltproc -''-nonet -''-param man.charmap.use.subset "0"
+
+manpage.1: manpage.xml
+        $(XP) $(DB2MAN) $<
+
+The xsltproc binary is found in the xsltproc package. The XSL files are in
+docbook-xsl. A description of the parameters you can use can be found in the
+docbook-xsl-doc-* packages. Please remember that if you create the nroff
+version in one of the debian/rules file targets (such as build), you will need
+to include xsltproc and docbook-xsl in your Build-Depends control field.
+Alternatively use the xmlto command/package. That will also automatically
+pull in xsltproc and docbook-xsl.
+
+Notes for using docbook2x: docbook2x-man does not automatically create the
+AUTHOR(S) and COPYRIGHT sections. In this case, please add them manually as
+<refsect1> ... </refsect1>.
+
+To disable the automatic creation of the AUTHOR(S) and COPYRIGHT sections
+read /usr/share/doc/docbook-xsl/doc/manpages/authors.html. This file can be
+found in the docbook-xsl-doc-html package.
+
+Validation can be done using: `xmllint -''-noout -''-valid manpage.xml`
+
+General documentation about man-pages and man-page-formatting:
+man(1), man(7), http://www.tldp.org/HOWTO/Man-Page/
+
+-->
+
+  <!-- Fill in your name for FIRSTNAME and SURNAME. -->
+  <!ENTITY dhfirstname "Mohammadreza">
+  <!ENTITY dhsurname   "Ghodsi">
+  <!-- dhusername could also be set to "&firstname; &surname;". -->  
+  <!ENTITY dhusername  "Mohammadreza Ghodsi">
+  <!ENTITY dhemail     "ghodsi@cs.umd.edu">
+  <!-- SECTION should be 1-8, maybe w/ subsection other parameters are
+       allowed: see man(7), man(1) and
+       http://www.tldp.org/HOWTO/Man-Page/q2.html. -->
+  <!ENTITY dhsection   "1">
+  <!-- TITLE should be something like "User commands" or similar (see
+       http://www.tldp.org/HOWTO/Man-Page/q2.html). -->
+  <!ENTITY dhtitle     "Bioinformatics Tools">
+  <!ENTITY dhucpackage "dnaclust">
+  <!ENTITY dhpackage   "dnaclust">
+]>
+
+<refentry>
+
+  <refentryinfo>
+    <title>&dhtitle;</title>
+    <productname>&dhpackage;</productname>
+    <authorgroup>
+      <author>
+       <firstname>&dhfirstname;</firstname>
+        <surname>&dhsurname;</surname>
+        <contrib>Designed and developed and maintains this package. Wrote this manpage.</contrib>
+        <address>
+          <email>&dhemail;</email>
+        </address>
+      </author>
+    </authorgroup>
+    <copyright>
+      <year>2010</year>
+      <holder>&dhusername;</holder>
+    </copyright>
+    <legalnotice>
+      <para>This manual page was written for the Debian system
+        (but may be used by others).</para>
+      <para>Permission is granted to copy, distribute and/or modify this
+        document under the terms of the GNU General Public License,
+        Version 2 or (at your option) any later version published by
+        the Free Software Foundation.</para>
+      <para>On Debian systems, the complete text of the GNU General Public
+        License can be found in
+	<filename>/usr/share/common-licenses/GPL</filename>.</para>
+    </legalnotice>
+  </refentryinfo>
+
+  <refmeta>
+    <refentrytitle>&dhucpackage;</refentrytitle>
+    <manvolnum>&dhsection;</manvolnum>
+  </refmeta>
+
+  <refnamediv>
+    <refname>&dhpackage;</refname>
+    <refpurpose>program to cluster large number of short DNA sequences</refpurpose>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <cmdsynopsis>
+      <command>&dhpackage;</command>
+      <!-- These are several examples, how syntaxes could look -->
+      <arg choice="plain">
+        <group choice="req">
+          <arg choice="plain"><option>-i</option></arg>
+          <arg choice="plain"><option>--input</option></arg>
+        </group>
+        <replaceable class="option">infile</replaceable>
+      </arg>
+
+      <arg choice="opt">
+        <group choice="req">
+          <arg choice="plain"><option>-s</option></arg>
+          <arg choice="plain"><option>--similarity</option></arg>
+        </group>
+        <replaceable class="option">threshold</replaceable>
+      </arg>
+
+      <arg choice="opt">
+        <group choice="req">
+          <arg choice="plain"><option>-m</option></arg>
+          <arg choice="plain"><option>--multiple-alignment</option></arg>
+        </group>
+      </arg>
+
+      <arg choice="opt">
+        <group choice="req">
+          <arg choice="plain"><option>-d</option></arg>
+          <arg choice="plain"><option>--header</option></arg>
+        </group>
+      </arg>
+
+      <arg choice="opt">
+        <group choice="req">
+          <arg choice="plain"><option>-l</option></arg>
+          <arg choice="plain"><option>--left-gaps-allowed</option></arg>
+        </group>
+      </arg>
+      
+      <arg choice="opt">
+        <group choice="req">
+          <arg choice="plain"><option>-k</option></arg>
+          <arg choice="plain"><option>--k-mer-length</option></arg>
+        </group>
+        <replaceable class="option">length</replaceable>
+      </arg>
+
+      <arg choice="opt">
+        <group choice="req">
+          <arg choice="plain"><option>-a</option></arg>
+          <arg choice="plain"><option>--approximate-filter</option></arg>
+        </group>
+      </arg>
+
+      <!-- Deprecated options
+	   <arg choice="opt">
+             <group choice="req">
+               <arg choice="plain"><option>-f</option></arg>
+               <arg choice="plain"><option> - -approximation-factor</option></arg>
+             </group>
+             <replaceable class="option">factor</replaceable>
+	   </arg>
+
+	   <arg choice="opt"><option> - -approximate-filter2</option></arg>
+	   -->
+
+      <arg choice="opt"><option>--no-k-mer-filter</option></arg>
+      
+    </cmdsynopsis>
+    <cmdsynopsis>
+      <command>&dhpackage;</command>
+      <!-- Normally the help and version options make the programs stop
+           right after outputting the requested information. -->
+      <group choice="opt">
+        <arg choice="plain">
+          <group choice="req">
+            <arg choice="plain"><option>-h</option></arg>
+            <arg choice="plain"><option>--help</option></arg>
+          </group>
+        </arg>
+        <arg choice="plain">
+          <group choice="req">
+            <arg choice="plain"><option>-v</option></arg>
+            <arg choice="plain"><option>--version</option></arg>
+          </group>
+        </arg>
+      </group>
+    </cmdsynopsis>
+  </refsynopsisdiv>
+
+  <refsect1 id="description">
+    <title>DESCRIPTION</title>
+    <para>This manual page documents briefly the
+      <command>&dhpackage;</command> program.</para>
+    <para><command>&dhpackage;</command> 
+      is a tool for clustering large number of short DNA sequences.
+      The clusters are created in such a way that the "radius" of each clusters is no more than the specified threshold.
+    </para>
+    <para>
+      The input sequences to be clustered should be in Fasta format.
+      The id of each sequence is based on the first word of the seqeunce in the Fasta format. 
+      The first word is the prefix of the header up to the first occurance of white space charachters in the header.
+      The output is written to STDOUT. If you want the output to be written to a file, just redirect the output (See Examples).
+    </para>
+    <para>
+      The output has two modes: the default clustering mode, and clustering with multiple sequence alignment.
+
+      In the clustering mode (without multiple alignment), each cluster will be printed on a separate line.
+      The line will contain the ids of the sequences in the cluster.
+      The first id in each line is the cluster center sequence id.
+      Because of the way our clusters are constructed, the length of the cluster center sequence is always greater than or equal to the length of any of the sequences in the cluster.
+
+      Please note that since usually some clusters contain many sequences, the lines of the output may be very long.
+      If you want to visually inspect the output, please use the 'less -S', or an editor that does not wrap long lines.
+      The number of clusters can be found using 'wc -l'.
+    </para>
+    <para>
+      For more information about the multiple sequence alignment mode see the description of <option>--multiple-alignment</option> option.
+    </para>
+  </refsect1>
+
+  <refsect1 id="options">
+    <title>OPTIONS</title>
+    <para>The program follows the usual GNU command line syntax,
+      with long options starting with two dashes ('-').  A summary of
+      options is included below.  
+    </para>
+    <variablelist>
+      <!-- Use the variablelist.term.separator and the
+           variablelist.term.break.after parameters to
+           control the term elements. -->
+      <varlistentry>
+        <term><option>--similarity <replaceable>threshold</replaceable></option></term>
+        <term><option>-s <replaceable>threshold</replaceable></option></term>
+        <listitem>
+	  <para>
+	    The similarity threshold specifies the radius of the clusters created.
+	    This parameter is a floating point number between 0 and 1. 
+	    It is calculated based on semi-global alignment of a sequence to the cluster center sequence.
+	    Namely similarity = 1 - (edit distance) / (length of the shorter sequence).
+	    The edit distance is the minimum number of insertions, deletions or substitutions necessary to aling a sequence to the cluster center sequence.
+	    Our algorithms are faster when the similarity is higher.
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--k-mer-length <replaceable>length</replaceable></option></term>
+        <term><option>-k <replaceable>length</replaceable></option></term>
+        <listitem>
+	  <para>
+	    When you use the k-mer filter (which is enabled by default) you can specify the maximum length of the k-mers used for filtering.
+	  </para>
+	  <para>
+	    The longer k-mer lengths require more memory to store k-mer counts and the filtering will be slower.
+	    However with the longer k-mer length, the filter will be more specific and therefore the sequence alignment search may be faster.
+	  </para>
+	  <para>
+	    There is a tradeoff between filtering and searching time. 
+	    If you do not specify the k-mer length a value of log<subscript>4</subscript>(median of the lengths of the input sequences) is picked automatically.
+	    By using this option you can override the default value.
+	  </para>
+	  <para>
+	    Keep in mind, however, that longer k-mer lengths would require more memory to store the filtering data structures. 
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--approximate-filter </option></term>
+        <term><option>-a </option></term>
+        <listitem>
+	  <para>
+	    By default the k-mer filter is 100 percent sensitive. 
+	    This means that in the output clustering, no two cluster centers are within the threshold distance from each other.
+	    The exact filter, however, is somewhat slow.
+	    This option speeds up the filter by using a heuristic.
+	    The use of the approximate filter may result in cluster centers that are close, and a larger number clusters overall.
+	    However the approximate filter is usually several times faster than the exact sensitive filter.
+	    Use this option if you are clustering primarily to reduce the redundancy in the data, and do not care about the quality of the clustering.
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--allow-left-gaps </option></term>
+        <term><option>-l </option></term>
+        <listitem>
+	  <para>
+	    With this option the distances are measured based on semi-global alignment.
+	    The semi-global alignment allows for gaps without penalty on both ends of the shorter sequence.
+	  </para>
+	  <para>
+	    The default alignment is a one sided semi-global alignment. i.e. gaps are only allowed at the right end of the shorter sequence without penalty.
+	    This behavior corresponds to the data from targeted sequening of a region (e.g. of 16S ribosomal RNA gene).
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--multiple-alignment</option></term>
+        <term><option>-m</option></term>
+        <listitem>
+          <para>
+	    Set the output format to show the multiple sequence alignment of each cluster.
+	    The gaps in the alignments are represented with the dash '-' charachter.	    
+	  </para>
+	  <para>
+	    The format of the MSA output is as follows:
+	    The MSA of each cluster spans several lines.
+	    The MSA starts with a line containing charachter '#' followed by the number of sequences in that cluster.
+	    The aligned sequences (which may contain gaps) follow in the Fasta format.
+	    Each Fasta record will be composed of two lines.
+	    The header line and the sequence line.
+	    Since each aligned sequence is output on a single line, the output may contain very long lines.
+	    Please use 'less -S', or an editor that does not wrap long lines for inspecting the MSA also.
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>--no-k-mer-filter</option></term>
+        <listitem>
+          <para>
+	    Disables the k-mer filter. 
+	    Suitable for clustering very short sequences at a high similarity threshold. 
+	  </para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>-d</option></term>
+        <term><option>--header</option></term>
+        <listitem>
+          <para>Write program options to output.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>-h</option></term>
+        <term><option>--help</option></term>
+        <listitem>
+          <para>Show summary of options.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
+        <term><option>-v</option></term>
+        <term><option>--version</option></term>
+        <listitem>
+          <para>Show version of program.</para>
+        </listitem>
+      </varlistentry>
+    </variablelist>
+  </refsect1>
+
+  <refsect1 id="examples">
+    <title>EXAMPLES</title>
+    <para>
+      <screen>./dnaclust file.fasta -l -s 0.98 -k 3 &gt; clusters</screen>
+    </para>
+  </refsect1>
+
+  <refsect1 id="bugs">
+    <!-- Or use this section to tell about upstream BTS. -->
+    <title>BUGS</title>
+    <para>The program is currently limited to only work
+      with the <package>boost</package> library.</para>
+  </refsect1>
+
+  <refsect1 id="see_also">
+    <title>SEE ALSO</title>
+    <!-- In alpabetical order. -->
+    <para>
+      <citerefentry>
+	<refentrytitle>awk</refentrytitle>
+	<manvolnum>1</manvolnum>
+      </citerefentry>,
+      <citerefentry>
+	<refentrytitle>less</refentrytitle>
+	<manvolnum>1</manvolnum>
+      </citerefentry>, 
+      <citerefentry>
+	<refentrytitle>wc</refentrytitle>
+	<manvolnum>1</manvolnum>
+      </citerefentry>
+    </para>
+  </refsect1>
+</refentry>
+
