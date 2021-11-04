@@ -30,7 +30,8 @@ optional arguments:
   -k MIN_CLUSTER, --min_cluster MIN_CLUSTER
                         Size of the smallest cluster to detect
   -t NUM_THREADS, --num_threads NUM_THREADS
-                        Number of threads```
+                        Number of threads
+  ```
                         
  SCRAPT uses DNACLUST internally to cluster and recruit sequences to cluster. 
 
