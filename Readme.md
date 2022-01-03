@@ -2,20 +2,25 @@
 
 ```
 usage: SCRAPT.py [-h] -f FILEPATH -o OUTPUT_DIRECTORY [-s SAMPLING_RATE]
-                 [-a ADAPTIVE] [-d DELTA] [-r SIMILARITY] [-m MAX_ITERATIONS]
-                 [-k MIN_CLUSTER] [-t NUM_THREADS]
+                 [-a ADAPTIVE] [-d DELTA] [-r SIMILARITY] [-n MAX_ITERATIONS]
+                 [-k MIN_CLUSTER] [-t NUM_THREADS] [-c COUNTS_DICT]
+                 [-m MODE_SHIFT]
 
 SCRAPT: Sampling Clustering Recruiting AdaPt and iTerate.SCRAPT is a tool to
-cluster 16S genen sequences, using an iterative approach
+cluster phylogenetic marker gene sequences, using an iterative approach.
 
 optional arguments:
   -h, --help            show this help message and exit
+
+required named arguments:
   -f FILEPATH, --filepath FILEPATH
                         Path to the file containing 16S sequences. At the
                         moment we support only fatsa file containing the 16S
                         reads.
   -o OUTPUT_DIRECTORY, --output_directory OUTPUT_DIRECTORY
                         Location to write the outputs to
+
+optional named arguments:
   -s SAMPLING_RATE, --Sampling_Rate SAMPLING_RATE
                         Initial Sampling Rate (between 0 and 100)
   -a ADAPTIVE, --adaptive ADAPTIVE
@@ -24,14 +29,19 @@ optional arguments:
                         Adjustment constant for the adaptive sampling
   -r SIMILARITY, --similarity SIMILARITY
                         Similairity to run clustering with
-  -m MAX_ITERATIONS, --max_iterations MAX_ITERATIONS
+  -n MAX_ITERATIONS, --max_iterations MAX_ITERATIONS
                         Maximum number of iterations to run the iterative
                         clustering.
   -k MIN_CLUSTER, --min_cluster MIN_CLUSTER
                         Size of the smallest cluster to detect
   -t NUM_THREADS, --num_threads NUM_THREADS
                         Number of threads
-  ```
+  -c COUNTS_DICT, --counts_dict COUNTS_DICT
+                        Path to the dictionary of counts. If it is not
+                        provided SCRAPT deduplicates the sequences.
+  -m MODE_SHIFT, --mode_shift MODE_SHIFT
+                        Perform Modeshifting
+ ```
                         
  SCRAPT uses DNACLUST internally to cluster and recruit sequences to cluster. 
 
