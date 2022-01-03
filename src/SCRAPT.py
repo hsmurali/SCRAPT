@@ -11,15 +11,15 @@ if __name__ == '__main__':
         
         requiredNamed.add_argument("-f", "--filepath", help="Path to the file containing 16S sequences. At the moment we support only fatsa file containing the 16S reads.", required=True)
         requiredNamed.add_argument("-o","--output_directory", help="Location to write the outputs to", required = True)
-        optionalNamed.add_argument("-s","--Sampling_Rate", help="Initial Sampling Rate (between 0 and 100)", required=False, default = "0.1")
-        optionalNamed.add_argument("-a","--adaptive", help="Flag to run SCRAPT in adaptve mode", required = False, default = "True")
-        optionalNamed.add_argument("-d","--delta", help = "Adjustment constant for the adaptive sampling", required = False, default = "0.008")
-        optionalNamed.add_argument("-r","--similarity", help="Similairity to run clustering with", required = False, default = "0.99")
-        optionalNamed.add_argument("-n","--max_iterations", help="Maximum number of iterations to run the iterative clustering.", required = False, default = "50")
-        optionalNamed.add_argument("-k","--min_cluster", help="Size of the smallest cluster to detect", required = False, default = "50")
-        optionalNamed.add_argument("-t","--num_threads", help="Number of threads", required = False, default="8")
+        optionalNamed.add_argument("-s","--Sampling_Rate", help="Initial Sampling Rate (between 0 and 100). [DEFAULT = 0.1]", required=False, default = "0.1")
+        optionalNamed.add_argument("-a","--adaptive", help="Flag to run SCRAPT in adaptve mode. [DEFAULT = True]", required = False, default = "True")
+        optionalNamed.add_argument("-d","--delta", help = "Adjustment constant for the adaptive sampling. [DEFAULT = 0.008]", required = False, default = "0.008")
+        optionalNamed.add_argument("-r","--similarity", help="Similairity threshold for clustering. [DEFAULT = 0.99]", required = False, default = "0.99")
+        optionalNamed.add_argument("-n","--max_iterations", help="Maximum number of iterations to run the iterative clustering. [DEFAULT = 50]", required = False, default = "50")
+        optionalNamed.add_argument("-k","--min_cluster", help="Size of the smallest cluster to detect. [DEFAULT = 50]", required = False, default = "50")
+        optionalNamed.add_argument("-t","--num_threads", help="Number of threads. [DEFAULT = 8]", required = False, default="8")
         optionalNamed.add_argument("-c","--counts_dict", help="Path to the dictionary of counts. If it is not provided SCRAPT deduplicates the sequences.", required = False, default = "")
-        optionalNamed.add_argument("-m","--mode_shift", help="Perform Modeshifting", required = False, default = "True")
+        optionalNamed.add_argument("-m","--mode_shift", help="Perform Modeshifting. [DEFAULT = True]", required = False, default = "True")
         args = parser.parse_args()
 
         seq_path = args.filepath
