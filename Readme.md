@@ -22,28 +22,30 @@ required named arguments:
 
 optional named arguments:
   -s SAMPLING_RATE, --Sampling_Rate SAMPLING_RATE
-                        Initial Sampling Rate (between 0 and 100)
+                        Initial Sampling Rate (between 0 and 100). [DEFAULT =
+                        0.1]
   -a ADAPTIVE, --adaptive ADAPTIVE
-                        Flag to run SCRAPT in adaptve mode
+                        Flag to run SCRAPT in adaptve mode. [DEFAULT = True]
   -d DELTA, --delta DELTA
-                        Adjustment constant for the adaptive sampling
+                        Adjustment constant for the adaptive sampling.
+                        [DEFAULT = 0.008]
   -r SIMILARITY, --similarity SIMILARITY
-                        Similairity to run clustering with
+                        Similairity threshold for clustering. [DEFAULT = 0.99]
   -n MAX_ITERATIONS, --max_iterations MAX_ITERATIONS
                         Maximum number of iterations to run the iterative
-                        clustering.
+                        clustering. [DEFAULT = 50]
   -k MIN_CLUSTER, --min_cluster MIN_CLUSTER
-                        Size of the smallest cluster to detect
+                        Size of the smallest cluster to detect. [DEFAULT = 50]
   -t NUM_THREADS, --num_threads NUM_THREADS
-                        Number of threads
+                        Number of threads. [DEFAULT = 8]
   -c COUNTS_DICT, --counts_dict COUNTS_DICT
                         Path to the dictionary of counts. If it is not
                         provided SCRAPT deduplicates the sequences.
   -m MODE_SHIFT, --mode_shift MODE_SHIFT
-                        Perform Modeshifting
- ```
+                        Perform Modeshifting. [DEFAULT = True]
+```
                         
- SCRAPT uses DNACLUST internally to cluster and recruit sequences to cluster. 
+SCRAPT uses DNACLUST internally to cluster and recruit sequences to cluster. 
 
 ## References
 Ghodsi, M., Liu, B. & Pop, M. DNACLUST: accurate and efficient clustering of phylogenetic marker genes. BMC Bioinformatics 12, 271 (2011). https://doi.org/10.1186/1471-2105-12-271
