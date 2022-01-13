@@ -1,5 +1,24 @@
 ```SCRAPT``` is tool that performs an iterative clustering of DNA sequences. SCRAPT: **S**ample **C**luster **R**ecruit **A**da**P**t and i**T**erate iteratively clusters by only clustering subsample and recruits more sequences into the clusters identified. SCRAPT identifies larger clusters much early on, only in a fraction of time taken by other conventional clustering methods. 
 
+## Software Requirements:
+
+```SCRAPT``` is written in Python 3 and uses the following python packages. 
+1. python >= 3.7.10
+2. seqkit >= 0.16.0
+3. pandas >= 1.2.4
+4. numpy >= 1.20.2
+In addition to this, ```SCRAPT``` uses ```DNACLUST``` as an internal engine for clustering and searching. 
+
+An Environment.yml is also available and a conda environment can be created as,
+```
+conda env create -f Environment.yml --prefix <path-to-install>
+```
+On installing the conda environment activate it through the following command,
+```
+conda activate <path-to-install>
+```
+
+
 ```
 usage: SCRAPT.py [-h] -f FILEPATH -o OUTPUT_DIRECTORY [-s SAMPLING_RATE]
                  [-a ADAPTIVE] [-d DELTA] [-r SIMILARITY] [-n MAX_ITERATIONS]
