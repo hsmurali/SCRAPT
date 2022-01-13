@@ -7,6 +7,7 @@
 2. seqkit >= 0.16.0
 3. pandas >= 1.2.4
 4. numpy >= 1.20.2
+
 In addition to this, ```SCRAPT``` uses ```DNACLUST``` as an internal engine for clustering and searching. 
 
 An Environment.yml is also available and a conda environment can be created as,
