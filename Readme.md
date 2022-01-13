@@ -14,11 +14,11 @@ An Environment.yml is also available and a conda environment can be created as,
 ```
 conda env create -f Environment.yml --prefix <path-to-install>
 ```
-On installing the conda environment activate it through the following command,
+
+On installing the conda environment, activate it before running ```SCRAPT``` with the following command,
 ```
 conda activate <path-to-install>
 ```
-
 
 ```
 usage: SCRAPT.py [-h] -f FILEPATH -o OUTPUT_DIRECTORY [-s SAMPLING_RATE]
@@ -64,8 +64,6 @@ optional named arguments:
   -m MODE_SHIFT, --mode_shift MODE_SHIFT
                         Perform Modeshifting. [DEFAULT = True]
 ```
-                        
-SCRAPT uses DNACLUST internally to cluster and recruit sequences to cluster. 
 
 ## References
 Ghodsi, M., Liu, B. & Pop, M. DNACLUST: accurate and efficient clustering of phylogenetic marker genes. BMC Bioinformatics 12, 271 (2011). https://doi.org/10.1186/1471-2105-12-271
