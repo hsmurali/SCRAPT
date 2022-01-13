@@ -1,4 +1,24 @@
-```SCRAPT``` is tool that performs an iterative clustering of DNA sequences. SCRAPT: **S**ample **C**luster **R**ecruit **A**da**P**t and i**T**erate iteratively clusters by only clustering subsample and recruits more sequences into the clusters identified. SCRAPT identifies larger clusters much early on, only in a fraction of time taken by other conventional clustering methods. 
+```SCRAPT```: **S**ample **C**luster **R**ecruit **A**da**P**t and i**T**erate is a tool that performs an iterative clustering of DNA sequences.  We propose an iterative sampling-based 16S rRNA sequence clustering approach that targets the largest clusters in the data set, allowing users to stop the clustering process when sufficient clusters are available for the specific analysis being targeted. We describe a probabilistic analysis of the iterative clustering process that supports the intuition that the clustering process identifies the larger clusters in the data set first. Using a real data set of 16S rRNA gene sequence data, we show that the iterative algorithm, coupled with an adaptive sampling process and a mode-shifting strategy for identifying cluster representatives, substantially speeds up the clustering process while being effective at capturing the large clusters in the dataset. The experiments also shows ```SCRAPT``` is able to produce OTUs which are less fragmented than popular tools: ```UCLUST```, ```CD-HIT``` and  ```DNACLUST```.
+
+## Software Requirements:
+
+```SCRAPT``` is written in Python 3 and uses the following python packages. 
+1. python >= 3.7.10
+2. seqkit >= 0.16.0
+3. pandas >= 1.2.4
+4. numpy >= 1.20.2
+
+In addition to this, ```SCRAPT``` uses ```DNACLUST``` as an internal engine for clustering and searching. 
+
+An Environment.yml is also available and a conda environment can be created as,
+```
+conda env create -f Environment.yml --prefix <path-to-install>
+```
+
+On installing the conda environment, activate it before running ```SCRAPT``` with the following command,
+```
+conda activate <path-to-install>
+```
 
 ```
 usage: SCRAPT.py [-h] -f FILEPATH -o OUTPUT_DIRECTORY [-s SAMPLING_RATE]
@@ -44,8 +64,6 @@ optional named arguments:
   -m MODE_SHIFT, --mode_shift MODE_SHIFT
                         Perform Modeshifting. [DEFAULT = True]
 ```
-                        
-SCRAPT uses DNACLUST internally to cluster and recruit sequences to cluster. 
 
 ## References
 Ghodsi, M., Liu, B. & Pop, M. DNACLUST: accurate and efficient clustering of phylogenetic marker genes. BMC Bioinformatics 12, 271 (2011). https://doi.org/10.1186/1471-2105-12-271
