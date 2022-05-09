@@ -8,13 +8,21 @@
 #SBATCH --qos=large
 #SBATCH --mem=36gb
 #SBATCH --cpus-per-task=16
+#SBATCH --nodelist=tern00
 
-data_path=/fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Earth_Microbiome/deduplicated.soil.seqs.fna
-out_path=/fs/cbcb-lab/mpop/projects/SCRAPT/Experiments/Spatil_Soil/DNACLUST_Benchmarks/
+######Lupus-Microbiome:
+	##seqs:   /fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Lupus-Microbiome-Published/deduplicated.seqs.fna
+	##outdir: /fs/cbcb-lab/mpop/projects/SCRAPT/Experiments/Lupus-Microbiome-Published/DNACLUST_Benchmarks/
+
+######Earth-Microbiome:
+	##seqs:   /fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Earth_Microbiome/deduplicated.soil.seqs.fna
+	##outdir: /fs/cbcb-lab/mpop/projects/SCRAPT/Experiments/Spatil_Soil/DNACLUST_Benchmarks/
+
 prog_path=/fs/cbcb-software/RedHat-7-x86_64/users/hsmurali/SCRAPT/dnaclust/dnaclust_linux_release3/dnaclust 
+data_path=${1}
+out_path=${2}
+sim=${3}
 
 mkdir ${out_path}
-
-sim=${1}
 
 /usr/bin/time -v ${prog_path} ${data_path} -s ${sim} -t 8 --no-k-mer-filter  > ${out_path}dnaclust_${sim}.txt

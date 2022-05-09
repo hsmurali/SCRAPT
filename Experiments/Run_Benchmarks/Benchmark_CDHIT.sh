@@ -12,9 +12,17 @@
 
 module load cdhit
 
-data_path=/fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Lupus-Microbiome-Published/deduplicated.seqs.fna
-out_path=/fs/cbcb-lab/mpop/projects/SCRAPT/Experiments/Lupus-Microbiome-Published/CDHIT_EST_Benchmarks_g_1/
-sim=${1}
+######Lupus-Microbiome:
+	##seqs:   /fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Lupus-Microbiome-Published/deduplicated.seqs.fna
+	##outdir: /fs/cbcb-lab/mpop/projects/SCRAPT/Experiments/Lupus-Microbiome-Published/CDHIT_EST_Benchmarks_g_1/
+
+######Earth-Microbiome:
+	##seqs:   /fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Earth_Microbiome/deduplicated.soil.seqs.fna
+	##outdir: /fs/cbcb-lab/mpop/projects/SCRAPT/Experiments/Spatil_Soil/CDHIT_EST_Benchmarks_g_1/
+
+data_path=${1}
+out_path=${2}
+sim=${3}
 
 mkdir ${out_path}
 mkdir ${out_path}CDHIT_EST_${sim}_g_1/

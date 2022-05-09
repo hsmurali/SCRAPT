@@ -8,21 +8,29 @@
 #SBATCH --qos=large 
 #SBATCH --mem=36gb
 #SBATCH --cpus-per-task=16
-#SBATCH --nodelist=cbcbgpu02
+#SBATCH --nodelist=tern00
 
 module load anaconda
 source activate /fs/cbcb-software/RedHat-7-x86_64/users/hsmurali/venvs/16S-Clustering/
-alpha=${1}
-sim=${2}
+
+######Lupus-Microbiome:
+	##seqs:   /fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Lupus-Microbiome-Published/deduplicated.seqs.fna
+	##counts: /fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Lupus-Microbiome-Published/Counts.dict
+	##outdir: /fs/cbcb-lab/mpop/projects/SCRAPT/Experiments/Lupus_Microbiome_MT/
+
+######Earth-Microbiome:
+	##seqs:   /fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Earth_Microbiome/deduplicated.soil.seqs.fna
+	##counts: /fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Earth_Microbiome/Counts.soil.dict
+	##outdir: /fs/cbcb-lab/mpop/projects/SCRAPT/Experiments/Spatil_Soil/
+
+data_path=${1}
+counts_path=${2}
+outdir=${3}
+alpha=${4}
+sim=${5}
 delta=0.008
 
-echo ${1}
-echo ${2}
-	
-data_path=/fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Lupus-Microbiome-Published/deduplicated.seqs.fna
-counts_path=/fs/cbcb-lab/mpop/projects/SCRAPT/Datasets/Lupus-Microbiome-Published/Counts.dict
 prog_path=/fs/cbcb-software/RedHat-7-x86_64/users/hsmurali/SCRAPT/src/
-outdir=/fs/cbcb-lab/mpop/projects/SCRAPT/Experiments/Lupus_Microbiome_MT/
 
 mkdir ${outdir}
 mkdir ${outdir}Adaptive_With_Modeshifting/
