@@ -98,4 +98,23 @@ def Parse_DNACLUST_Outputs(filepath):
 		if len(d.split()) >= 2:
 			dnaclust_size.append(len(d.split()))
 	return dnaclust_size
-	
+
+def Parse_CDHIT_Outputs(filepath):
+	cdhit_clusters = []
+	with open(filepath) as file:
+		counter = 0
+		centroid = []
+		density = []
+		l = 0
+		for line in file:
+			a = line.rstrip()
+			if a[0] == ">":
+				if(l!= 0 ):
+					density.append(counter)       
+				centroid.append(a[1:])
+				counter = 0
+			else:
+				counter = counter + 1 
+			l = l + 1
+		density.append(counter)
+	return density

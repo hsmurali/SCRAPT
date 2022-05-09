@@ -8,6 +8,8 @@ import random
 import time
 import sys
 from typing import Tuple
+import multiprocessing
+from shutil import rmtree
 
 def DE_DUPLICATE_SEQUENCES(filepath, out_path)->bool:
 	counts = out_path+"Counts.txt"
@@ -34,7 +36,7 @@ def WRITE_COUNTS_DICT(filepath):
 		a = l.split('\t')
 		counts = a[0]
 		seq_ids = a[1].split(', ')
-		d[seq_ids[0]] = {'Counts':counts, 'Dup_List':list(seq_ids[1:])}
+		d[seq_ids[0]] = {'Counts':counts}#, 'Dup_List':list(seq_ids[1:])}
 
 	f = open(head+'/Counts.dict','w')
 	f.write(str(d))
@@ -85,6 +87,69 @@ def Cluster_Sequences(sampled_seq_path, dist_cutoff, out_path, counts, num_threa
         clust_summary, singletons, nonsingletons = Parse_DNACLUST_output(out_path+'/cluster_step', counts)
         result = " %s minutes " % str(round((time.time() - start_time)/60, 2))
         return result, clust_summary
+
+def Split_Sequences(unclustered_seq_path, split_size, out_dir):
+        mkdir(out_dir)
+        command = "seqkit split "+ unclustered_seq_path +" -s " +str(split_size)+ " -O "+out_dir
+        subprocess.Popen(command,shell=True).wait()
+
+def Job(cmd):
+        subprocess.call(cmd, shell=True) 
+
+def Bait_Sequences_Split_Merge(center_list, unclustered_seq_dir, unclustered_seq_path, dist_cutoff, counts, fnames, num_threads, dna_clust_out_dir):
+        start_time = time.time()
+        f = open(fnames[0],'w')
+        lines = [c+'\n' for c in center_list]
+        f.writelines(lines)
+        f.close()
+
+        flag = Extract_Sequences(unclustered_seq_path, fnames[0], 1, fnames[1:])
+        mkdir(dna_clust_out_dir)
+
+        bait_samples = listdir(unclustered_seq_dir)
+        head, tail = split(dirname(realpath(__file__)))
+        prog_path = head+'/dnaclust/dnaclust_linux_release3/dnaclust '
+        
+        commands = []
+
+        for i in range(len(bait_samples)):
+                if bait_samples[i].endswith(".fna"):
+                        seq_path = unclustered_seq_dir + bait_samples[i]
+                        dna_clust_op_path = dna_clust_out_dir+'dnaclust.'+str(i)+'.out'
+                        dnaclust_bait = prog_path + seq_path + ' -s ' + dist_cutoff + ' -p ' + fnames[1] + ' -r  -t '+ num_threads + ' --no-k-mer-filter > ' + dna_clust_op_path
+                        commands.append(dnaclust_bait)
+
+        pool = multiprocessing.Pool(int(num_threads))
+        result = pool.map(func=Job, iterable=commands)
+        pool.close()
+        pool.join()
+        
+        d = {}
+        for i in listdir(dna_clust_out_dir):
+                lines = open(dna_clust_out_dir + i,'r').readlines()
+                for l in lines:
+                        l = l.rstrip().split()
+                        if len(l) == 1:
+                                try:
+                                        d[l[0]] = d[l[0]] + []
+                                except KeyError:
+                                        d[l[0]] = []
+                        else:
+                                try:
+                                        d[l[0]] = d[l[0]] + l[1:]
+                                except KeyError:
+                                        d[l[0]] = l[1:]
+        o = open(fnames[2],'w')
+        for k in d:
+                app = " ".join(d[k])
+                o.write(k + " " + app+"\n")
+        o.close()
+
+        clust_summary, singletons, nonsingletons = Parse_DNACLUST_output(fnames[2], counts)
+        result = " %s minutes " % str(round((time.time() - start_time)/60, 2))
+        rmtree(dna_clust_out_dir)
+
+        return result, clust_summary, singletons, nonsingletons
 
 def Bait_Sequences(center_list, unclustered_seq_path, dist_cutoff, counts, fnames, num_threads)->Tuple[str, pd.DataFrame, list, list]:
         ###fnames[0]: pattern name, fnames[1]: center_names fnames[2]: unclust fnames[3]: bait_op
@@ -153,7 +218,7 @@ def Get_Summary(df_clust_bait, df_clust_modeshift, min_cluster_size)->dict:
       
         return d
 
-def SCRAPT_Iteration(unclustered_seqs, sampling_rate, out_path, iter_id, min_cluster_size, counts, d_cutoff, num_threads, modeshift_flag)->Tuple[dict, list]:
+def SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, sampling_rate, out_path, iter_id, min_cluster_size, counts, d_cutoff, num_threads, modeshift_flag)->Tuple[dict, list]:
         #####SAMPLING
         iteration_time = time.time()
         mkdir(out_path)
@@ -165,22 +230,32 @@ def SCRAPT_Iteration(unclustered_seqs, sampling_rate, out_path, iter_id, min_clu
         
         #####CLUSTERING
         cluster_time, cluster_summary = Cluster_Sequences(sampled_seq, str(d_cutoff), out_path, counts, num_threads)
+        print(cluster_summary.head())
+
+        ######Split_Fasta_Files
+        split_size = min(int(unclustered_seq_count/int(num_threads)), 1000000)
+        Split_Sequences(unclustered_seqs, split_size, out_path + '/Split_Seqs/')
+
         
         #####BAITING
         bait_centroids = cluster_summary.loc[((cluster_summary['Density'] > 1) | (cluster_summary['Mode'] > 1)), 'Centroid'].tolist()
-        op_filenames = [out_path+'/bait_centroids.txt', out_path+'/bait_centroids.fna', out_path+'/bait_subjects.fna', out_path+'/dnaclust_bait']
-        (bait_time, bait_summary, 
-         bait_singletons, bait_nonsingletons) = Bait_Sequences(bait_centroids, unclustered_seqs, str(d_cutoff), counts, op_filenames, num_threads)
-        
+        op_filenames = [out_path+'/bait_centroids.txt', out_path+'/bait_centroids.fna', out_path+'/dnaclust_bait']
+        (bait_time, 
+         bait_summary, 
+         bait_singletons, 
+         bait_nonsingletons) = Bait_Sequences_Split_Merge(bait_centroids, out_path+'/Split_Seqs/', unclustered_seqs, str(d_cutoff), counts, op_filenames, num_threads, out_path+'/Bait/')
+
+        #####MODE SHIFTING
         if modeshift_flag == True:
-               #####MODE SHIFTING
+                print(bait_summary.head())
                 mode_centroids = bait_summary.loc[(bait_summary['Density'] > 1), 'Mode_Seq'].tolist()
-                op_filenames = [out_path+'/bait_mode.txt', out_path+'/bait_mode.fna', out_path+'/bait_mode_subjects.fna', out_path+'/dnaclust_mode_bait']
-                (mode_shift_time, mode_shift_summary, 
-                 mode_shift_singletons, mode_shift_nonsingletons) = Bait_Sequences(mode_centroids, unclustered_seqs, str(d_cutoff), counts, op_filenames, num_threads)
+                op_filenames = [out_path+'/bait_mode.txt', out_path+'/bait_mode.fna', out_path+'/dnaclust_mode_bait']
+                (mode_shift_time, 
+                 mode_shift_summary, 
+                 mode_shift_singletons, 
+                 mode_shift_nonsingletons) = Bait_Sequences_Split_Merge(mode_centroids, out_path+'/Split_Seqs/',unclustered_seqs, str(d_cutoff), counts, op_filenames, num_threads, out_path+'/Bait_Mode/')
                 mode_shift_summary.to_csv(out_path+'/Cluster_Summary.txt', sep = '\t')
                 clustered_seqs_list = mode_shift_nonsingletons
-        
         else:
                 mode_shift_summary = []
                 mode_shift_singletons = []
@@ -193,7 +268,7 @@ def SCRAPT_Iteration(unclustered_seqs, sampling_rate, out_path, iter_id, min_clu
         lines = [c + '\n' for c in clustered_seqs_list]
         fp.writelines(lines)
         fp.close()
-        unclust_extract = Extract_Sequences(unclustered_seqs, out_path+'/unclustered_seqs', 2, [out_path+'/unclustered_seqs_'+str(iter_id)])
+        unclust_extract = Extract_Sequences(unclustered_seqs, out_path+'/unclustered_seqs', 2, [out_path+'/unclustered_seqs_'+str(iter_id)+'.fna'])
         if(unclust_extract == False):
                 print('Failed to extract unclustered sequences')
                 sys.exit(0)   
@@ -203,7 +278,8 @@ def SCRAPT_Iteration(unclustered_seqs, sampling_rate, out_path, iter_id, min_clu
                 remove(unclustered_seqs)
 
         ######SUMMARIZE CLUSTERS
-        unclustered_seqs = out_path+'/unclustered_seqs_'+str(iter_id)
+        rmtree(out_path + '/Split_Seqs/')
+        unclustered_seqs = out_path+'/unclustered_seqs_'+str(iter_id)+'.fna'
         d = Get_Summary(bait_summary, mode_shift_summary, min_cluster_size)
         d['Sampling Rate'] = sampling_rate
         d['Cluster Singletons'] = len(cluster_summary[cluster_summary['Density'] == 1])

@@ -66,7 +66,9 @@ if __name__ == '__main__':
         pre_processing_time = " %s minutes " % str(round((time.time() - start_time)/60, 2))
         summary_list = []
         ctr = 0
-
+        cmd_read_counts = "grep \"^>\" -c "+seq_path
+        unclustered_seq_count = int(subprocess.check_output(cmd_read_counts, shell = True))
+        
         while (ctr < num_iterations):
                 if adaptive == "True":
                         if(ctr >= 2):
@@ -78,13 +80,16 @@ if __name__ == '__main__':
                 print(ctr, '------->', prev_counts, curr_counts, alpha_new, cum_ctr, cum_clstr)
                 out_path = directory+'/Iteration_' + str(ctr)
                 ctr += 1
-                d, unclustered_seqs = SCRAPT_Iteration(unclustered_seqs, alpha_new, out_path, ctr, min_cluster_size, counts, d_cutoff, num_threads, modeshift)
+                d, unclustered_seqs = SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, alpha_new, out_path, ctr, min_cluster_size, counts, d_cutoff, num_threads, modeshift)
                 prev_counts = curr_counts
+
                 if (modeshift):
+                        unclustered_seq_count = unclustered_seq_count - d['Clustered sequences(After shifting the centers)']
                         curr_counts =  d['Clustered sequences(After shifting the centers)'] 
                         cum_ctr +=  d['Clustered sequences(After shifting the centers)']
                         cum_clstr += d['Num Clusters Above Min Cluster Size(After shifting the centers)']
                 else:
+                        unclustered_seq_count = unclustered_seq_count - d['Clustered sequences(Baiting on dnaclust centers)'] 
                         curr_counts =  d['Clustered sequences(Baiting on dnaclust centers)'] 
                         cum_ctr +=  d['Clustered sequences(Baiting on dnaclust centers)']
                         cum_clstr += d['Num Clusters Above Min Cluster Size(Baiting on dnaclust centers)']
