@@ -239,6 +239,7 @@ def SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, sampling_rate, out
         
         #####BAITING
         bait_centroids = cluster_summary.loc[((cluster_summary['Density'] > 1) | (cluster_summary['Mode'] > 1)), 'Centroid'].tolist()
+        #bait_centroids = cluster_summary.loc[((cluster_summary['Density'] > 1)), 'Centroid'].tolist()
         op_filenames = [out_path+'/bait_centroids.txt', out_path+'/bait_centroids.fna', out_path+'/dnaclust_bait']
         (bait_time, 
          bait_summary, 
@@ -248,14 +249,22 @@ def SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, sampling_rate, out
         #####MODE SHIFTING
         if modeshift_flag == True:
                 print(bait_summary.head())
-                mode_centroids = bait_summary.loc[(bait_summary['Density'] > 1), 'Mode_Seq'].tolist()
-                op_filenames = [out_path+'/bait_mode.txt', out_path+'/bait_mode.fna', out_path+'/dnaclust_mode_bait']
-                (mode_shift_time, 
-                 mode_shift_summary, 
-                 mode_shift_singletons, 
-                 mode_shift_nonsingletons) = Bait_Sequences_Split_Merge(mode_centroids, out_path+'/Split_Seqs/',unclustered_seqs, str(d_cutoff), counts, op_filenames, num_threads, out_path+'/Bait_Mode/')
-                mode_shift_summary.to_csv(out_path+'/Cluster_Summary.txt', sep = '\t')
-                clustered_seqs_list = mode_shift_nonsingletons
+                try:
+                        mode_centroids = bait_summary.loc[(bait_summary['Density'] > 1), 'Mode_Seq'].tolist()
+                        op_filenames = [out_path+'/bait_mode.txt', out_path+'/bait_mode.fna', out_path+'/dnaclust_mode_bait']
+                        (mode_shift_time, 
+                         mode_shift_summary, 
+                         mode_shift_singletons, 
+                         mode_shift_nonsingletons) = Bait_Sequences_Split_Merge(mode_centroids, out_path+'/Split_Seqs/',unclustered_seqs, str(d_cutoff), counts, op_filenames, num_threads, out_path+'/Bait_Mode/')
+                        mode_shift_summary.to_csv(out_path+'/Cluster_Summary.txt', sep = '\t')
+                        clustered_seqs_list = mode_shift_nonsingletons
+                except KeyError:
+                        mode_shift_summary = []
+                        mode_shift_singletons = []
+                        clustered_seqs_list = bait_nonsingletons
+                        bait_summary.to_csv(out_path+'/Cluster_Summary.txt', sep = '\t')
+                        mode_shift_time = 0
+
         else:
                 mode_shift_summary = []
                 mode_shift_singletons = []
