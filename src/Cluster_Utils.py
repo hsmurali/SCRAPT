@@ -207,7 +207,7 @@ def Get_Summary(df_clust_bait, df_clust_modeshift, min_cluster_size)->dict:
         d['Average number of sequences per cluster(Baiting on dnaclust centers)'] = df_clust_bait.loc[df_clust_bait['Density'] > 1, 'Density'].mean()
         d['Median number of sequences per cluster(Baiting on dnaclust centers)'] = df_clust_bait.loc[df_clust_bait['Density'] > 1, 'Density'].median()
         d['Num Clusters Above Min Cluster Size(Baiting on dnaclust centers)'] = len(df_clust_bait.loc[df_clust_bait['Density'] >= min_cluster_size])
-              
+      
         if len(df_clust_modeshift) > 0:
                 d['Densest cluster(After shifting the centers)'] = df_clust_modeshift['Density'].max()
                 d['Average number of sequences per cluster(After shifting the centers)']  = df_clust_modeshift.loc[df_clust_modeshift['Density']>1, 'Density'].mean()
@@ -238,8 +238,12 @@ def SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, sampling_rate, out
 
         
         #####BAITING
-        bait_centroids = cluster_summary.loc[((cluster_summary['Density'] > 1) | (cluster_summary['Mode'] > 1)), 'Centroid'].tolist()
-        #bait_centroids = cluster_summary.loc[((cluster_summary['Density'] > 1)), 'Centroid'].tolist()
+        try:
+                bait_centroids = cluster_summary.loc[((cluster_summary['Density'] > 1) | (cluster_summary['Mode'] > 1)), 'Centroid'].tolist()
+                #bait_centroids = cluster_summary.loc[((cluster_summary['Density'] > 1)), 'Centroid'].tolist()
+        except KeyError:
+                return {}, unclustered_seqs
+
         op_filenames = [out_path+'/bait_centroids.txt', out_path+'/bait_centroids.fna', out_path+'/dnaclust_bait']
         (bait_time, 
          bait_summary, 
@@ -289,6 +293,9 @@ def SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, sampling_rate, out
         ######SUMMARIZE CLUSTERS
         rmtree(out_path + '/Split_Seqs/')
         unclustered_seqs = out_path+'/unclustered_seqs_'+str(iter_id)+'.fna'
+        if len(bait_summary) == 0:
+                return {}, unclustered_seqs
+                
         d = Get_Summary(bait_summary, mode_shift_summary, min_cluster_size)
         d['Sampling Rate'] = sampling_rate
         d['Cluster Singletons'] = len(cluster_summary[cluster_summary['Density'] == 1])

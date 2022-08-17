@@ -82,17 +82,19 @@ if __name__ == '__main__':
                 ctr += 1
                 d, unclustered_seqs = SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, alpha_new, out_path, ctr, min_cluster_size, counts, d_cutoff, num_threads, modeshift)
                 prev_counts = curr_counts
-
-                if (modeshift):
-                        unclustered_seq_count = unclustered_seq_count - d['Clustered sequences(After shifting the centers)']
-                        curr_counts =  d['Clustered sequences(After shifting the centers)'] 
-                        cum_ctr +=  d['Clustered sequences(After shifting the centers)']
-                        cum_clstr += d['Num Clusters Above Min Cluster Size(After shifting the centers)']
-                else:
-                        unclustered_seq_count = unclustered_seq_count - d['Clustered sequences(Baiting on dnaclust centers)'] 
-                        curr_counts =  d['Clustered sequences(Baiting on dnaclust centers)'] 
-                        cum_ctr +=  d['Clustered sequences(Baiting on dnaclust centers)']
-                        cum_clstr += d['Num Clusters Above Min Cluster Size(Baiting on dnaclust centers)']
+                try:
+                        if (modeshift):
+                                unclustered_seq_count = unclustered_seq_count - d['Clustered sequences(After shifting the centers)']
+                                curr_counts =  d['Clustered sequences(After shifting the centers)'] 
+                                cum_ctr +=  d['Clustered sequences(After shifting the centers)']
+                                cum_clstr += d['Num Clusters Above Min Cluster Size(After shifting the centers)']
+                        else:
+                                unclustered_seq_count = unclustered_seq_count - d['Clustered sequences(Baiting on dnaclust centers)'] 
+                                curr_counts =  d['Clustered sequences(Baiting on dnaclust centers)'] 
+                                cum_ctr +=  d['Clustered sequences(Baiting on dnaclust centers)']
+                                cum_clstr += d['Num Clusters Above Min Cluster Size(Baiting on dnaclust centers)']
+                except KeyError:
+                        unclustered_seq_count, curr_counts, cum_clstr, cum_ctr = unclustered_seq_count, 0, cum_clstr, cum_ctr
                 summary_list.append(d)
         try:
                 df_summary = pd.DataFrame(summary_list)
