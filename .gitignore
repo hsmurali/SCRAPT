@@ -135,4 +135,4 @@ src/editb/bin/
 src/editbd-bait/bin/
 .*
 !.gitignore
-
+dnaclust/bin/
