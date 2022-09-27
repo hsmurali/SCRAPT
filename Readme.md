@@ -7,17 +7,22 @@
 2. seqkit >= 0.16.0
 3. pandas >= 1.2.4
 4. numpy >= 1.20.2
-
-In addition to this, ```SCRAPT``` uses ```DNACLUST``` as an internal engine for clustering and searching. 
+5. gxx >= 9.3.0
 
 An Environment.yml is also available and a conda environment can be created as,
 ```
 conda env create -f Environment.yml --prefix <path-to-install>
 ```
 
-On installing the conda environment, activate it before running ```SCRAPT``` with the following command,
+On installing the conda environment, activate it as
 ```
 conda activate <path-to-install>
+```
+
+```SCRAPT``` uses ```DNACLUST``` as the default clustering kernel.  To install ```DNACLUST```, run the following commands. 
+```
+cd SCRAPT/dnaclust
+make
 ```
 
 ```
