@@ -5,14 +5,17 @@ DNACLUST is a tool for clustering millions of short DNA sequences.
 To run ```DNACLUST```
 ```
 bin/dnaclust -h 
-Usage: DNACLUST [-h] --input-file VAR [--similarity VAR] [--predetermined-cluster-centers VAR] [--recruit-only] [--header] [--left-gaps-allowed] 
-                [--k-mer-length VAR] [--approximate-filter] [--k-mer-filter] [--no-overlap] [--threads VAR] [--use-full-query-header] 
-                [--mismatches VAR] [--assign-ambiguous] [--random-seed VAR] [--print-inverted-index]
+Usage: DNACLUST [-h] --input-file VAR [--similarity VAR] [--predetermined-cluster-centers VAR] [--recruit-only] [--header] 
+                [--left-gaps-allowed] [--k-mer-length VAR] [--approximate-filter] [--k-mer-filter] [--no-overlap] 
+                [--threads VAR] [--use-full-query-header] [--mismatches VAR] [--assign-ambiguous] [--random-seed VAR] 
+                [--print-inverted-index]
 
 The output is written to STDOUT.
 Each line will contain the ids of the sequences in each cluster,and the first id of each line is the cluster representative.
+
 Example: To cluster a set of 16S rRNA fragments at 0.98 similarity use:
 bin/dnaclust -i file.fasta -l -s 0.98 > clusters 
+
 You can optionally specify a k-mer length for the filter.The longer k-mers use more memory. Also the filter will be more specific with longer k-mers.The.default_value log_4(median length) should be good for most cases.
 
 
