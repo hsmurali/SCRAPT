@@ -19,11 +19,12 @@ On installing the conda environment, activate it as
 conda activate <path-to-install>
 ```
 
-```SCRAPT``` uses ```DNACLUST``` as the default clustering kernel.  To install ```DNACLUST```, run the following commands. 
+```SCRAPT``` uses ```DNACLUST``` as the default clustering kernel.  To install ```DNACLUST```, run the following commands. (Please make sure the virtual environment is active before compiling ```DNACLUST```.
 ```
 cd SCRAPT/dnaclust
 make
 ```
+On installing ```DNACLUST```, run ```SCRAPT``` as, 
 
 ```
 usage: SCRAPT.py [-h] -f FILEPATH -o OUTPUT_DIRECTORY [-s SAMPLING_RATE]
