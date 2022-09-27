@@ -8,3 +8,4 @@ dependencies:
  - seqkit=0.16.0
  - pandas=1.2.4
  - numpy=1.20.2
+ - gxx>=9

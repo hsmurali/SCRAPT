@@ -80,8 +80,8 @@ def Parse_DNACLUST_output(dnaclust_op, counts)->Tuple[pd.DataFrame, list, list]:
 
 def Cluster_Sequences(sampled_seq_path, dist_cutoff, out_path, counts, num_threads)->Tuple[str, pd.DataFrame]:
         head, tail = split(dirname(realpath(__file__)))
-        prog_path = head+'/dnaclust/dnaclust_linux_release3/dnaclust '
-        dnaclust_call = prog_path + (sampled_seq_path) + ' -s ' + str(dist_cutoff) + ' -t '+num_threads+' --no-k-mer-filter > ' + out_path + '/cluster_step'
+        prog_path = head+'/dnaclust/bin/dnaclust -i '
+        dnaclust_call = prog_path + (sampled_seq_path) + ' -s ' + str(dist_cutoff) + ' -t '+num_threads+' > ' + out_path + '/cluster_step'
         start_time = time.time()
         subprocess.call(dnaclust_call, shell=True)
         clust_summary, singletons, nonsingletons = Parse_DNACLUST_output(out_path+'/cluster_step', counts)
@@ -108,7 +108,7 @@ def Bait_Sequences_Split_Merge(center_list, unclustered_seq_dir, unclustered_seq
 
         bait_samples = listdir(unclustered_seq_dir)
         head, tail = split(dirname(realpath(__file__)))
-        prog_path = head+'/dnaclust/dnaclust_linux_release3/dnaclust '
+        prog_path = head+'/dnaclust/bin/dnaclust -i '
         
         commands = []
 
@@ -116,7 +116,8 @@ def Bait_Sequences_Split_Merge(center_list, unclustered_seq_dir, unclustered_seq
                 if bait_samples[i].endswith(".fna"):
                         seq_path = unclustered_seq_dir + bait_samples[i]
                         dna_clust_op_path = dna_clust_out_dir+'dnaclust.'+str(i)+'.out'
-                        dnaclust_bait = prog_path + seq_path + ' -s ' + dist_cutoff + ' -p ' + fnames[1] + ' -r  -t '+ num_threads + ' --no-k-mer-filter > ' + dna_clust_op_path
+                        dnaclust_bait = prog_path + seq_path + ' -s ' + dist_cutoff + ' -p ' + fnames[1] + ' -r  -t '+ num_threads + ' > ' + dna_clust_op_path
+                        print(dnaclust_bait)
                         commands.append(dnaclust_bait)
 
         pool = multiprocessing.Pool(int(num_threads))
@@ -161,8 +162,8 @@ def Bait_Sequences(center_list, unclustered_seq_path, dist_cutoff, counts, fname
         flag = Extract_Sequences(unclustered_seq_path, fnames[0], 0, fnames[1:])
         if(flag):
                 head, tail = split(dirname(realpath(__file__)))
-                prog_path = head+'/dnaclust/dnaclust_linux_release3/dnaclust '
-                dnaclust_bait = prog_path + fnames[2] + ' -s ' + dist_cutoff + ' -p ' + fnames[1] + ' -r  -t '+ num_threads + ' --no-k-mer-filter > ' + fnames[3]
+                prog_path = head+'/dnaclust/bin/dnaclust -i '
+                dnaclust_bait = prog_path + fnames[2] + ' -s ' + dist_cutoff + ' -p ' + fnames[1] + ' -r  -t '+ num_threads + ' > ' + fnames[3]
                 subprocess.call(dnaclust_bait, shell=True)
                 clust_summary, singletons, nonsingletons = Parse_DNACLUST_output(fnames[3], counts)
                 result = " %s minutes " % str(round((time.time() - start_time)/60, 2))
