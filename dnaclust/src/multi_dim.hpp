@@ -81,8 +81,6 @@ namespace multi_dim{
             Matrix(const size_type nrows, const size_type ncols)
               : buffer_(nrows * ncols), size1_(nrows), size2_(ncols)
             {}
-
-        #if MATRIX_RESIZABLE
       
             Matrix()
                 : buffer_(), size1_(0), size2_(0)
@@ -101,8 +99,7 @@ namespace multi_dim{
                 size2_ = ncols;
                 buffer_.resize(nrows * ncols);
             }
-        #endif // MATRIX_RESIZABLE
-
+        
         reference at(const size_type i, const size_type j)
         {
             rangeCheck_(i, j);

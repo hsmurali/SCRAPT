@@ -14,71 +14,20 @@
 #include "argparse.hpp"
 #include "ternary_sort.hpp"
 #include "fasta.hpp"
-
-#define MATRIX_RESIZABLE 1
-
 #include "multi_dim.hpp"
 #include "utility.hpp"
+#include "kmer_utils.hpp"
 
-typedef char CharType;
-typedef const CharType * ConstCharPointer;
-typedef std::vector<ConstCharPointer> ConstCharPointerVector;
-typedef int PositionType;
-typedef int SequenceNumber;
-typedef intptr_t Index;
+enum BackPointer {LEFT, DOWN, DOWN_LEFT, ROOT};
+
+typedef multi_dim::Matrix<KmerCount> CountMatrix;
+typedef multi_dim::Matrix<CostType> DpTable;
+typedef multi_dim::Matrix<BackPointer> BackPointerTable;
 
 uint16_t running_threads = 0;
 size_t num_threads = 1;
 int threads_completed = 0;
 pthread_mutex_t running_mutex;
-
-struct thread_args
-{
-    PositionType l;
-    PositionType r;
-    PositionType pos;
-    Index intervalIndex;
-    uint16_t tableIndex;
-    int globalOffset;
-};
-
-SequenceNumber numberOfInputSequences;
-
-bool outputMultipleAlignment = false;
-bool leftGapsAllowed = false;
-bool noKmerFilter = true;
-bool kmerFilter = false;
-bool approximateFilter2 = false;
-bool noOverlap = false;
-bool recruit_only = false;
-bool useFullQueryHeader = false;
-
-ConstCharPointerVector sortedStrings;
-ConstCharPointerVector lexicographicSequencePointers;
-ConstCharPointerVector headerPointers;
-typedef std::vector<PositionType> PositionVector;
-PositionVector headerLengths;
-PositionVector sequenceLengths;
-ConstCharPointer querySequencePointer;
-PositionType querySequenceLength;
-ConstCharPointer queryHeaderPointer;
-PositionType queryHeaderLength;
-
-
-const CharType endOfStringChar = '\0';
-const CharType invalidChar = '^';
-const CharType gapChar = '-';
-const char HEADER_INDICATOR = '%';
-const char CLUSTER_INDICATOR = '#';
-
-typedef int32_t CostType;
-const CostType MAX_COST = std::numeric_limits<CostType>::max() / 2;
-
-struct Context {
-    int id;
-};
-
-const size_t MAX_THREADS = 60;
 pthread_t searchWorkers[MAX_THREADS];
 struct Context searchWorkersContext[MAX_THREADS];
 struct thread_args searchWorkersArgs[MAX_THREADS];
@@ -87,160 +36,36 @@ pthread_cond_t searchWorkersConds[MAX_THREADS];
 pthread_cond_t searchWorkersCompleted;
 pthread_mutex_t allThreadsMutex;
 
-const size_t MAX_LENGTH = 4500;
+CountMatrix spectrumMatrix;
+IndexVector spectrumSplitGuide, lexicographicIndexOfSortedStringsIndexes, lexicographicIndexOfSpectrumIndexes, spectrumSearchResults;
+KmerSpectrum querySpectrum, queryLowSpectrum;
+PositionVector spectrumRemainingGuide;
+SpectrumIndexVector spectrumIndexes;
+
+SequenceNumber numberOfInputSequences;
+ConstCharPointerVector sortedStrings, lexicographicSequencePointers, headerPointers;
+PositionVector headerLengths, sequenceLengths;
+ConstCharPointer querySequencePointer, queryHeaderPointer;
+PositionType querySequenceLength, queryHeaderLength;
+
 std::vector< std::vector<CharType> > word(MAX_THREADS, std::vector<CharType>(MAX_LENGTH + 1));
 std::vector< std::vector<PositionType> > wordMinLength(MAX_THREADS, std::vector<PositionType>(MAX_LENGTH + 1));
 std::vector< std::vector<CostType> > minCost(MAX_THREADS, std::vector<CostType>(MAX_LENGTH + 1));
 std::vector< std::vector<PositionType> > left(MAX_THREADS, std::vector<PositionType>(MAX_LENGTH + 1));
 std::vector< std::vector<PositionType> > right(MAX_THREADS, std::vector<PositionType>(MAX_LENGTH + 1));
-
-CostType radious;
-
-float DEFAULT_SIMILARITY = 0.99;
-float similarity;
-
-float DEFAULT_MISMATCHES = -1.0;
-float mismatches;
-
-bool printInvertedIndex = false;
-bool assignAmbiguous = false;
 std::map< std::string, std::vector<std::string> > final_clusters;
 std::map< std::string, std::vector<std::string> > inverted_index;
 std::map< std::string, int > center_nonambig_counts;
 
-template<typename T>
-std::ostream & operator<<(std::ostream & os, std::vector<T> vec)
-{
-    os<<"{ ";
-    std::copy(vec.begin(), vec.end(), std::ostream_iterator<T>(os, " "));
-    os<<"}";
-    return os;
-}
+SearchResultVector searchResults;
+std::vector< SearchResultVector > threadSearchResults(MAX_THREADS);
+std::vector< PositionVector > sortedStringsLengthsMinTree(MAX_THREADS);
+std::vector< PositionVector > sortedStringsLengthsMaxTree(MAX_THREADS);
+int resultsCounter[MAX_THREADS];
 
-template <typename BaseType, typename ExponentType>
-BaseType power(const BaseType base, const ExponentType exponent)
-{
-    BaseType result = 1;
-    for (ExponentType i = 0; i < exponent; ++i)
-        result *= base;
-    return result;
-}
-
-
-const int MAXIMUM_K_MER_LENGTH = 6;
-
-int k_mer_length;
-int random_seed = 0;
-
-enum Nucleotides{A, C, G, T, NUMBER_OF_NUCLEOTIDES};
-
-typedef int16_t KmerNumber;
-
-KmerNumber number_of_k_mers;
-
-// Exception thrown when program gets an unkown nucleotide letter.
-class UnknownNucleotide : public std::exception
-{
-    public:
-        UnknownNucleotide(CharType nucleotide) throw()
-            : nucleotide_(nucleotide)
-        { }
-
-        virtual const char *what() const throw()
-        {
-            std::ostringstream messageStream;
-            messageStream << "Sequence contains unknown nucleotide: " << nucleotide_ << ".";
-            return messageStream.str().c_str();
-        }
-
-    private:
-        const CharType nucleotide_;
-};
-
-// Return an integer number in range 0..(NUMBER_OF_NUCLEOTIDES - 1) for a given nucleotide character.
-int numberFromNucleotide(const CharType nucleotide)
-{
-    switch(tolower(nucleotide)) 
-    {
-        case 'a':
-            return A;
-        case 'c':
-            return C;
-        case 'g':
-            return G;
-        case 't':
-            return T;
-        default:
-            return A;
-        throw UnknownNucleotide(nucleotide);
-    }
-}
-
-typedef uint16_t KmerCount;
-const KmerCount MAX_K_MER_COUNT = std::numeric_limits<KmerCount>::max();
-
-// k-mer spectrum is a vector of integers counting how many of each k-mer there are in a sequence.
-typedef std::vector<KmerCount> KmerSpectrum;
-
-// Count the number of each k-mer in a sequence and return a vector of counts.
-KmerSpectrum countKmers(ConstCharPointer sequence, PositionType length)
-{
-    KmerSpectrum spectrum(number_of_k_mers);
-    if (length >= k_mer_length) 
-    {
-        int i = 0;
-        int kMerNumber = 0;
-        for (; i < k_mer_length; ++i) 
-        {
-            kMerNumber *= NUMBER_OF_NUCLEOTIDES;
-            kMerNumber += numberFromNucleotide(sequence[i]);
-        }
-        ++spectrum[kMerNumber];
-        for (; i < length; ++i) 
-        {
-            kMerNumber *= NUMBER_OF_NUCLEOTIDES;
-            kMerNumber %= number_of_k_mers;
-            kMerNumber += numberFromNucleotide(sequence[i]);
-            if (spectrum[kMerNumber] < MAX_K_MER_COUNT)
-                ++spectrum[kMerNumber];
-        }    
-    }
-    return spectrum;
-}
-
-typedef std::vector<Index> IndexVector;
-typedef multi_dim::Matrix<KmerCount> CountMatrix;
-
-IndexVector lexicographicIndexOfSortedStringsIndexes;
-CountMatrix spectrumMatrix;
-IndexVector lexicographicIndexOfSpectrumIndexes;
-IndexVector spectrumSearchResults;
-KmerSpectrum querySpectrum;
-KmerSpectrum queryLowSpectrum;
-IndexVector spectrumSplitGuide;
-PositionVector spectrumRemainingGuide;
-
-/*
-  Search for potential matches based on their k-mer spectrum.
-  The query's k-mer spectrum should in global variable 'querySpectrum'.
-  The k-mer spectrums for the sequences to be clustered are in global variable 'specturms'.
-  Results will be in global variable ''.
-*/
-
-typedef std::pair<KmerSpectrum, Index> SpectrumIndexPair;
-typedef std::vector<SpectrumIndexPair> SpectrumIndexVector;
-    
-SpectrumIndexVector spectrumIndexes;
-enum BackPointer {LEFT, DOWN, DOWN_LEFT, ROOT};
-typedef multi_dim::Matrix<CostType> DpTable;
+CostType radious;
 DpTable *tables[MAX_THREADS];
-typedef multi_dim::Matrix<BackPointer> BackPointerTable;
 BackPointerTable backTable(MAX_LENGTH + 1, MAX_LENGTH + 1);
-inline const CostType cost(const CharType c1, const CharType c2)
-{
-    return (c1 != c2) ? 1 : 0;
-}
-
 
 void initialize()
 {
@@ -266,105 +91,6 @@ void initialize()
     }
 } 
 
-typedef std::vector<PositionType> AlignmentFunction;
-typedef std::tuple<CostType, AlignmentFunction> AlignmentCostAndFunction;
-
-AlignmentCostAndFunction findAlignmentFunction(const PositionType len1, const PositionType len2, const PositionType pos2)
-{
-    AlignmentFunction alignmentFunc(len2 + 1);
-    CostType minCost = 0; 
-    PositionType i = len1;
-    PositionType j = len2;
-
-    assert(minCost <= radious);
-
-    while (j > pos2)
-    {
-        alignmentFunc[j] = i;
-        --j;
-    }
-
-    while (backTable(i, j) != ROOT)
-    {
-        switch(backTable(i, j))
-        {
-            case DOWN:
-                alignmentFunc[j] = i;
-                --i;
-                break;
-            case LEFT:
-                alignmentFunc[j] = i;
-                --j;
-                break;
-            case DOWN_LEFT:
-                alignmentFunc[j] = i;
-                --i;
-                --j;
-                break;
-            case ROOT:
-                default:
-                std::stringstream errorStream;
-                errorStream << "Invalid back pointer value; backTable(" << i << "," << j << ")=" << backTable(i, j) << ".";
-            throw std::logic_error(errorStream.str());
-        }
-    }   
-    alignmentFunc[j] = i;
-  return std::make_tuple(minCost, alignmentFunc);
-} 
-
-struct SearchResult
-{
-    SequenceNumber number;
-    CostType cost;
-    AlignmentFunction func;
-};
-
-typedef std::vector<SearchResult> SearchResultVector;
-SearchResultVector searchResults;
-
-std::vector< SearchResultVector > threadSearchResults(MAX_THREADS);
-std::vector< PositionVector > sortedStringsLengthsMinTree(MAX_THREADS);
-std::vector< PositionVector > sortedStringsLengthsMaxTree(MAX_THREADS);
-int resultsCounter[MAX_THREADS];
-
-template <class Iterator1, class Iterator2>
-Iterator2 buildMaxTree(Iterator1 first, Iterator1 last, Iterator2 intervalIterator)
-{
-    if (last > first) 
-    {
-        if (last == first + 1) {
-            *intervalIterator = *first;
-        } 
-        else 
-        {
-            Iterator1 mid = first + (last - 1 - first) / 2 + 1;
-            *intervalIterator = std::max(*buildMaxTree(first,  mid, intervalIterator + 1),
-            *buildMaxTree(mid,   last, intervalIterator + 2 * (mid - first)));
-        }
-    }
-    return intervalIterator;
-}
-
-template <class Iterator1, class Iterator2>
-Iterator2 buildMinTree(Iterator1 first, Iterator1 last, Iterator2 intervalIterator)
-{
-    if (last > first) 
-    {
-        if (last == first + 1) 
-        {
-            *intervalIterator = *first;
-        } 
-        else 
-        {
-            Iterator1 mid = first + (last - 1 - first) / 2 + 1;
-            *intervalIterator = std::min(*buildMinTree(first,  mid, intervalIterator + 1),
-            *buildMinTree(mid,   last, intervalIterator + 2 * (mid - first)));
-        }
-    }
-    return intervalIterator;
-}
-
-
 /*
   The implementation of search function is seperated in another file.
   The reason for this is to reuse the code to make two search functions:
@@ -372,11 +98,6 @@ Iterator2 buildMinTree(Iterator1 first, Iterator1 last, Iterator2 intervalIterat
   The second search function will find the alignment.
 */
 
-#define ALIGN_WITH_BACKPOINTER 0
-#include "search_include.cpp"
-
-#undef ALIGN_WITH_BACKPOINTER
-#define ALIGN_WITH_BACKPOINTER 1
 #include "search_include.cpp"
 
 template <class InputIterator>
@@ -385,7 +106,6 @@ std::string firstWord(InputIterator first, InputIterator last)
     return std::string(first, std::find_if(first, last, isspace));
 }
 
-typedef std::vector<char> BoolVector;
 BoolVector marked;
 BoolVector markedGrey;
 int numberOfMarked;
@@ -394,13 +114,6 @@ int remainingAtLastDbUpdate;
 sequence::Fasta inputFasta;
 sequence::Fasta predeterminedCentersFasta;
 
-bool lessSpectrumIndexPair(const SpectrumIndexPair &x, const SpectrumIndexPair &y, KmerNumber dimension)
-{
-    return x.first[dimension] < y.first[dimension];
-}
-
-typedef std::vector<KmerCount> KmerCountVector;
-
 template <class RandomAccessIterator>
 RandomAccessIterator median(RandomAccessIterator first, RandomAccessIterator last)
 {
@@ -408,9 +121,6 @@ RandomAccessIterator median(RandomAccessIterator first, RandomAccessIterator las
     std::nth_element(first, mid, last);
     return mid;
 }
-
-typedef const KmerCount * const ConstKmerCountArray;
-typedef KmerCount * const KmerCountArray;
 
 Index twoMeans(const Index l, const Index r)
 {
@@ -515,21 +225,12 @@ namespace cluster_information
     Index *r = 0;
     Index *sizeOfLeftCluster = 0;
 
-
     Index *numberOfKmers = 0;
     KmerCount **allMinCounts = 0;
     KmerCount **allMaxCounts = 0;
 
     int **counts = 0;
 }
-
-
-
-const KmerCount MAX_COUNT = std::numeric_limits<KmerCount>::max();
-const KmerCount MIN_COUNT = 0;
-
-const Index NULL_INDEX = -1;
-
 
 void clusterSort(const Index l, const Index r, const Index index)
 {
@@ -581,15 +282,10 @@ void clusterSort(const Index l, const Index r, const Index index)
     Index mid = twoMeans(l, r);
     cluster_information::sizeOfLeftCluster[index] = mid - l;
     clusterSort(l, mid, index + 1);
-     clusterSort(mid, r, index + 2 * (mid - l));
+    clusterSort(mid, r, index + 2 * (mid - l));
 }
 
 IndexVector clusterSearchResults;
-typedef const KmerCount * const ConstKmerCountArray;
-typedef int Threshold;
-
-Threshold maxMoreThreshold;
-Threshold minMoreThreshold;
 
 namespace layered 
 {
@@ -662,7 +358,7 @@ void *threaded_search_without_backpointer(void *read_args)
 }
 
 
-void * threadWorker(void *context) 
+void *threadWorker(void *context) 
 {
     int id = (static_cast<struct Context *>(context))->id;
     pthread_mutex_lock(&searchWorkersMutexes[id]);
@@ -758,7 +454,6 @@ void makeCluster()
             word[i][1] = invalidChar;
             wordMinLength[i][1] = MAX_LENGTH + 1;
         }    
-        //size_t num_threads_to_use = num_threads;
         int interval_size = static_cast<int>(ceil(sortedStrings.size() / static_cast<double>(num_threads)));
         if (sortedStrings.size() < num_threads) {
             num_threads = 1;
@@ -769,12 +464,10 @@ void makeCluster()
         for (unsigned int i = 0, currentTable = 0; i < sortedStrings.size(); i += interval_size, ++currentTable) 
         {
             unsigned int end = i + interval_size;
-            if (i + interval_size > sortedStrings.size()) {
+            if (i + interval_size > sortedStrings.size()) 
                 end = sortedStrings.size();
-            }
-            else {
+            else 
                 end = i + interval_size;
-            }
             sortedStringsLengthsMinTree[currentTable].resize(2 * (end - i));
             sortedStringsLengthsMaxTree[currentTable].resize(2 * (end - i));
             buildMinTree(sortedStringsLengths.begin() + i, sortedStringsLengths.begin() + end, sortedStringsLengthsMinTree[currentTable].begin());
@@ -782,41 +475,33 @@ void makeCluster()
         }
         if (numberOfUnmarkeds) 
         {
-            if (outputMultipleAlignment)
-                search(0, numberOfUnmarkeds - 1, 0, 0, 0, 0);
-            else 
+            running_threads = 0;
+            threads_completed = 0;
+            for (int i = 0; i < numberOfUnmarkeds; i += interval_size) 
             {
-                running_threads = 0;
-                threads_completed = 0;
-                for (int i = 0; i < numberOfUnmarkeds; i += interval_size) 
-                {
-                    ++running_threads;
-                    pthread_mutex_lock(&searchWorkersMutexes[running_threads-1]);
-                    struct thread_args *args = &searchWorkersArgs[running_threads-1];
-                    args->l = 0;
-                    if (i + interval_size > numberOfUnmarkeds) {
-                        args->r = (numberOfUnmarkeds - 1) - i;
-                    }
-                    else {
-                        args->r = interval_size - 1;
-                    }
-                    args->pos = 0;
-                    args->intervalIndex = 0;
-                    args->tableIndex = running_threads-1;
-                    args->globalOffset = i;
-                    pthread_cond_signal(&searchWorkersConds[running_threads-1]);
-                    pthread_mutex_unlock(&searchWorkersMutexes[running_threads-1]);
-                }
-                // Wait for all threads to complete.
-                pthread_mutex_lock(&allThreadsMutex);
-                while (threads_completed < running_threads) {
-                    pthread_cond_wait(&searchWorkersCompleted, &allThreadsMutex);
-                }
-                pthread_mutex_unlock(&allThreadsMutex);
-                for(int i = 0; i < running_threads; i++)  {
-                    searchResults.insert(searchResults.end(), threadSearchResults[i].begin(), threadSearchResults[i].end());
-                    threadSearchResults[i].clear();
-                }
+                ++running_threads;
+                pthread_mutex_lock(&searchWorkersMutexes[running_threads-1]);
+                struct thread_args *args = &searchWorkersArgs[running_threads-1];
+                args->l = 0;
+                if (i + interval_size > numberOfUnmarkeds) 
+                    args->r = (numberOfUnmarkeds - 1) - i;
+                else 
+                    args->r = interval_size - 1;
+                args->pos = 0;
+                args->intervalIndex = 0;
+                args->tableIndex = running_threads-1;
+                args->globalOffset = i;
+                pthread_cond_signal(&searchWorkersConds[running_threads-1]);
+                pthread_mutex_unlock(&searchWorkersMutexes[running_threads-1]);
+            }
+            // Wait for all threads to complete.
+            pthread_mutex_lock(&allThreadsMutex);
+            while (threads_completed < running_threads)
+                pthread_cond_wait(&searchWorkersCompleted, &allThreadsMutex);
+            pthread_mutex_unlock(&allThreadsMutex);
+            for(int i = 0; i < running_threads; i++)  {
+                searchResults.insert(searchResults.end(), threadSearchResults[i].begin(), threadSearchResults[i].end());
+                threadSearchResults[i].clear();
             }
         }
     } // if (! noKmerFilter)
@@ -827,112 +512,69 @@ void makeCluster()
             wordMinLength[i][1] = MAX_LENGTH + 1;
         }
         searchResults.clear();
-        if (outputMultipleAlignment)
-            search(0, sortedStrings.size() - 1, 0, 0, 0, 0);
-        else 
+        int interval_size = static_cast<int>(ceil(sortedStrings.size() / static_cast<double>(num_threads)));
+        if (sortedStrings.size() < num_threads) 
         {
-            //int num_threads_to_use = num_threads;
-            int interval_size = static_cast<int>(ceil(sortedStrings.size() / static_cast<double>(num_threads)));
-            if (sortedStrings.size() < num_threads) 
-            {
-                num_threads = 1;
-                interval_size = sortedStrings.size();
-            }
-            running_threads = 0;
-            threads_completed = 0;
-            for (unsigned int i = 0; i < sortedStrings.size(); i += interval_size) 
-            {
-                ++running_threads;
-                pthread_mutex_lock(&searchWorkersMutexes[running_threads - 1]);
-                struct thread_args *args = &searchWorkersArgs[running_threads - 1];
-                args->l = 0;
-                if (i + interval_size > sortedStrings.size()) {
-                    args->r = (sortedStrings.size() - 1) - i;
-                }
-                else {
-                    args->r = interval_size - 1;
-                }
-                args->pos = 0;
-                args->intervalIndex = 0;
-                args->tableIndex = running_threads-1;
-                args->globalOffset = i;
-                pthread_cond_signal(&searchWorkersConds[running_threads-1]);
-                pthread_mutex_unlock(&searchWorkersMutexes[running_threads-1]);
-            }
-            pthread_mutex_lock(&allThreadsMutex);
-            while (threads_completed < running_threads) {
-                pthread_cond_wait(&searchWorkersCompleted, &allThreadsMutex);
-            }
-            pthread_mutex_unlock(&allThreadsMutex);
-            for(int i = 0; i < running_threads; i++)  {
-                searchResults.insert(searchResults.end(), threadSearchResults[i].begin(), threadSearchResults[i].end());
-                threadSearchResults[i].clear();
-            }
+            num_threads = 1;
+            interval_size = sortedStrings.size();
+        }
+        running_threads = 0;
+        threads_completed = 0;
+        for (unsigned int i = 0; i < sortedStrings.size(); i += interval_size) 
+        {
+            ++running_threads;
+            pthread_mutex_lock(&searchWorkersMutexes[running_threads - 1]);
+            struct thread_args *args = &searchWorkersArgs[running_threads - 1];
+            args->l = 0;
+            if (i + interval_size > sortedStrings.size())
+                args->r = (sortedStrings.size() - 1) - i;
+            else
+                args->r = interval_size - 1;
+            args->pos = 0;
+            args->intervalIndex = 0;
+            args->tableIndex = running_threads-1;
+            args->globalOffset = i;
+            pthread_cond_signal(&searchWorkersConds[running_threads-1]);
+            pthread_mutex_unlock(&searchWorkersMutexes[running_threads-1]);
+        }
+        pthread_mutex_lock(&allThreadsMutex);
+        while (threads_completed < running_threads)
+            pthread_cond_wait(&searchWorkersCompleted, &allThreadsMutex);
+        pthread_mutex_unlock(&allThreadsMutex);
+        for(int i = 0; i < running_threads; i++)  {
+            searchResults.insert(searchResults.end(), threadSearchResults[i].begin(), threadSearchResults[i].end());
+            threadSearchResults[i].clear();
         }
     }
     { 
-        if (outputMultipleAlignment) {
-            std::cout << CLUSTER_INDICATOR << searchResults.size() + 1 << '\n';
-        }
         typedef std::vector<PositionType> CountsVector;
         // This vector will contain the maximum number of gaps that happen after position [i] in query string in ANY of the alignments to search results.
         CountsVector gapCounts(querySequenceLength);
-        if (outputMultipleAlignment) 
-        { 
-            // Compute gapCounts[0..].
-            for (SearchResultVector::const_iterator resultIterator = searchResults.begin(); resultIterator != searchResults.end(); ++resultIterator) 
-            {
-                for (PositionType i = 0; i < static_cast<PositionType>(resultIterator->func.size() - 1); ++i)
-                    gapCounts[i] = std::max(gapCounts[i], resultIterator->func[i + 1] - resultIterator->func[i] - 1);
-            } // for
-        } 
         // This string will contain the query sequence with appropriate number of gaps inserted at each position to produce a multiple alignment of the cluster.
         std::string clusterCenterSequenceWithGaps;
-        if (outputMultipleAlignment) 
-        { // Compute clusterCenterSequenceWithGaps.
-            for (PositionType positionInQuery = 0; positionInQuery < querySequenceLength; ++positionInQuery) 
-            {
-                clusterCenterSequenceWithGaps.append(gapCounts[positionInQuery], gapChar);
-                clusterCenterSequenceWithGaps.push_back(querySequencePointer[positionInQuery]);
-            } // for
-        } // if (outputMultipleAlignment)
-        // Output cluster center sequence with gaps from multiple alignment.
-        if (outputMultipleAlignment) {
-            std::cout << '>' << queryHeaderPointer << '\n'<< clusterCenterSequenceWithGaps << '\n';
+        if (useFullQueryHeader) 
+        {
+            if (!assignAmbiguous)
+                std::cout << queryHeaderPointer << '\t';
+            else 
+                if (!printInvertedIndex)
+                    center_nonambig_counts[queryHeaderPointer] = 1;
         } 
-        else {
-            if (useFullQueryHeader) 
-            {
-                if (!assignAmbiguous) {
-                    std::cout << queryHeaderPointer << '\t';
-                } 
-                else 
-                {
-                    if (!printInvertedIndex)
-                        center_nonambig_counts[queryHeaderPointer] = 1;
-                }
-            } 
-            else {
-                if (!assignAmbiguous) {
-                    std::cout << firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength) << '\t';
-                } 
-                else {
-                    if (!printInvertedIndex)
-                        center_nonambig_counts[firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength)] = 1;
-                }
-            }
-        } 
-        // Output multiple alignment of sequences in current cluster.
+        else 
+        {
+            if (!assignAmbiguous)
+                std::cout << firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength) << '\t';
+            else
+                if (!printInvertedIndex)
+                    center_nonambig_counts[firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength)] = 1;
+        }
         for (SearchResultVector::const_iterator resultIterator = searchResults.begin(); resultIterator != searchResults.end(); ++resultIterator) 
         {
             Index lexicographicIndex;
-            if (! noKmerFilter) {
-             lexicographicIndex = unmarkeds[resultIterator->number];
-            } 
-            else {
-             lexicographicIndex = lexicographicIndexOfSortedStringsIndexes[resultIterator->number];
-            }
-            ConstCharPointer s = sortedStrings[resultIterator->number];
+            if (! noKmerFilter)
+                lexicographicIndex = unmarkeds[resultIterator->number];
+            else
+                lexicographicIndex = lexicographicIndexOfSortedStringsIndexes[resultIterator->number];
             if (!assignAmbiguous)
                 markedGrey[lexicographicIndex] = true;
             if ((!noOverlap) || resultIterator->cost < radious / 2) 
@@ -945,63 +587,39 @@ void makeCluster()
                     }
                     ConstCharPointer headerPointer = headerPointers[lexicographicIndex];
                     PositionType headerLength = headerLengths[lexicographicIndex];
-                    if (outputMultipleAlignment) 
-                    {
-                        std::string alignedSequence; 
-                        for (PositionType i = 0; i < static_cast<PositionType>(gapCounts.size()); ++i) 
-                        {
-                            for (PositionType j = resultIterator->func[i + 1] - resultIterator->func[i]; j < gapCounts[i] + 1; ++j)
-                                alignedSequence.push_back(gapChar);
-                            for (PositionType j = resultIterator->func[i]; j < resultIterator->func[i + 1]; ++j)
-                                alignedSequence.push_back(s[j]);
-                     }
-                       std::cout << '>' << headerPointer << '\n'<< alignedSequence << '\n';
-                    } 
-                    else 
-                    {
-                        if (useFullQueryHeader) {
-                            if (!assignAmbiguous) {
-                                std::cout << headerPointer << '\t';
-                            }
-                            else {
-                                if (printInvertedIndex) {
-                                    std::cout << headerPointer << '\t' << queryHeaderPointer << '\n';
-                                } 
-                                else {
-                                    inverted_index[headerPointer].push_back(queryHeaderPointer);
-                                    if (inverted_index[headerPointer].size() == 1) {
-                                        center_nonambig_counts[queryHeaderPointer] += 1;
-                                    } 
-                                    else if (inverted_index[headerPointer].size() == 2) {
-                                        center_nonambig_counts[inverted_index[headerPointer][0]] -= 1;
-                                    }
-                                }
-                            }
-                        } 
+                    if (useFullQueryHeader) {
+                        if (!assignAmbiguous)
+                            std::cout << headerPointer << '\t';
                         else {
-                            if (!assignAmbiguous) {
-                                std::cout << firstWord(headerPointer, headerPointer + headerLength) << '\t';
-                            } 
+                            if (printInvertedIndex)
+                                std::cout << headerPointer << '\t' << queryHeaderPointer << '\n';
                             else {
-                                if (printInvertedIndex) {
-                                    std::cout << firstWord(headerPointer, headerPointer + headerLength) << '\t' 
-                                              << firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength) << '\n';
-                                } 
-                                else {
-                                    inverted_index[firstWord(headerPointer, headerPointer + headerLength)].push_back(
-                                                   firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength));
-                                    if (inverted_index[firstWord(headerPointer, headerPointer + headerLength)].size() == 1) {
-                                        center_nonambig_counts[firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength)] += 1;
-                                    } 
-                                    else if (inverted_index[firstWord(headerPointer, headerPointer + headerLength)].size() == 2) {
-                                        center_nonambig_counts[inverted_index[firstWord(headerPointer, headerPointer + headerLength)][0]] -= 1;
-                                    }
-                                }
+                                inverted_index[headerPointer].push_back(queryHeaderPointer);
+                                if (inverted_index[headerPointer].size() == 1)
+                                    center_nonambig_counts[queryHeaderPointer] += 1;
+                                else if (inverted_index[headerPointer].size() == 2)
+                                    center_nonambig_counts[inverted_index[headerPointer][0]] -= 1;
+                            }
+                        }
+                    } 
+                    else {
+                        if (!assignAmbiguous)
+                            std::cout << firstWord(headerPointer, headerPointer + headerLength) << '\t';
+                        else {
+                            if (printInvertedIndex)
+                                std::cout << firstWord(headerPointer, headerPointer + headerLength) << '\t' 
+                                          << firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength) << '\n';
+                            else {
+                                inverted_index[firstWord(headerPointer, headerPointer + headerLength)].push_back(
+                                               firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength));
+                                if (inverted_index[firstWord(headerPointer, headerPointer + headerLength)].size() == 1)
+                                    center_nonambig_counts[firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength)] += 1;
+                                else if (inverted_index[firstWord(headerPointer, headerPointer + headerLength)].size() == 2) 
+                                    center_nonambig_counts[inverted_index[firstWord(headerPointer, headerPointer + headerLength)][0]] -= 1;
                             }
                         }
                     }
-      
-             } // if (!marked[lexicographicIndex])
+                } // if (!marked[lexicographicIndex])
             } // if ((!noOverlap) || resultIterator->cost < radious / 2)
         } // for
   
@@ -1009,8 +627,6 @@ void makeCluster()
             std::cout << '\n';
     } // Output cluster alignment.
 }
-
-////Here 09/21/22
 
 int main(int argc, char *argv[])
 {

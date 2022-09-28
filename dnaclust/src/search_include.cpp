@@ -1,11 +1,3 @@
-#undef SEARCH_FUNCTION_NAME
-
-#if ALIGN_WITH_BACKPOINTER
-#define SEARCH_FUNCTION_NAME search
-#else // ALIGN_WITH_BACKPOINTER is false
-#define SEARCH_FUNCTION_NAME search_without_backpointer
-#endif // ALIGN_WITH_BACKPOINTER
-
 /*
   Input:
   Global: radious, similarity, sortedStrings.
@@ -14,7 +6,7 @@
 */
 
 
-void SEARCH_FUNCTION_NAME(const PositionType l, const PositionType r, PositionType pos, const Index intervalIndex, const uint16_t tableIndex, const int globalOffset)
+void search_without_backpointer(const PositionType l, const PositionType r, PositionType pos, const Index intervalIndex, const uint16_t tableIndex, const int globalOffset)
 {
     DpTable *table = tables[tableIndex];
     std::vector<CharType> *localWord = &word[tableIndex];
@@ -39,20 +31,19 @@ void SEARCH_FUNCTION_NAME(const PositionType l, const PositionType r, PositionTy
             Index rightIntervalIndex = 2 * (mid - l + 1) + intervalIndex;
             if (sortedStringsLengthsMinTree[tableIndex][leftIntervalIndex] < sortedStringsLengthsMinTree[tableIndex][rightIntervalIndex]) 
             {
-              SEARCH_FUNCTION_NAME(l,       mid, pos, leftIntervalIndex, tableIndex, globalOffset);
-              SEARCH_FUNCTION_NAME(mid + 1, r,   pos, rightIntervalIndex, tableIndex, globalOffset);
+              search_without_backpointer(l,       mid, pos, leftIntervalIndex, tableIndex, globalOffset);
+              search_without_backpointer(mid + 1, r,   pos, rightIntervalIndex, tableIndex, globalOffset);
             } 
             else 
             {
-              SEARCH_FUNCTION_NAME(mid + 1, r,   pos, rightIntervalIndex, tableIndex, globalOffset);
-              SEARCH_FUNCTION_NAME(l,       mid, pos, leftIntervalIndex, tableIndex, globalOffset);
+              search_without_backpointer(mid + 1, r,   pos, rightIntervalIndex, tableIndex, globalOffset);
+              search_without_backpointer(l,       mid, pos, leftIntervalIndex, tableIndex, globalOffset);
             }
             return;
         } 
         if (endOfStringChar == sortedStrings[globalOffset + l][pos]) 
         {
             SearchResult result;
-
             PositionType minPos = std::max(0, (*localLeft)[pos] + pos);
             for(PositionType i = minPos + 1; i <= (*localRight)[pos] + pos; ++i)
                 if ((*table)(pos, i) < (*table)(pos, minPos))
@@ -64,11 +55,6 @@ void SEARCH_FUNCTION_NAME(const PositionType l, const PositionType r, PositionTy
                 acceptable_differences = mismatches;
             if ((*table)(pos, minPos) <= acceptable_differences) 
             {
-                if (outputMultipleAlignment) 
-                {
-                    std::tie(result.cost, result.func) = findAlignmentFunction(pos, querySequenceLength, minPos);
-                } 
-
                 for (PositionType i = l; i <= r; ++i) 
                 {
                     result.number = i + globalOffset;
@@ -88,58 +74,32 @@ void SEARCH_FUNCTION_NAME(const PositionType l, const PositionType r, PositionTy
                 const PositionType maxColumn = std::min(querySequenceLength, (*localRight)[pos] + (pos + 1));
                 CostType currentMinCost = MAX_COST;
                 CostType currentCost;
-                #if ALIGN_WITH_BACKPOINTER
-                    BackPointer currentPointer;
-                #endif // ALIGN_WITH_BACKPOINTER
                 const PositionType i = pos + 1;
                 const CharType c1 = (*localWord)[i];
                 CharType c2; 
                 CostType matchCost, gapCost2, gapCost1;
                 CostType leftCost, downLeftCost, downCost;
                 leftCost = MAX_COST;
-                if (minColumn > 0) {
+                if (minColumn > 0)
                     downLeftCost = (*table)(i - 1, minColumn - 1);
-                } 
-                else {
+                else 
                     downLeftCost = MAX_COST;
-                }
                 for (PositionType j = minColumn; j <= maxColumn; ++j) 
                 {
                     { // Update table(i, j) = table(pos + 1, j)
-                        #if ALIGN_WITH_BACKPOINTER
-                            currentPointer = ROOT;
-                        #endif // ALIGN_WITH_BACKPOINTER
                         currentCost = MAX_COST;
                         c2 = querySequencePointer[j - 1];
                         matchCost = downLeftCost + cost(c1, c2);
                         if (matchCost < currentCost) 
-                        {
                             currentCost = matchCost;
-                            #if ALIGN_WITH_BACKPOINTER
-                                currentPointer = DOWN_LEFT;
-                            #endif // ALIGN_WITH_BACKPOINTER
-                        }
                         gapCost2 = leftCost + cost(gapChar, c2);
                         if (gapCost2 < currentCost) 
-                        {
                             currentCost = gapCost2;
-                            #if ALIGN_WITH_BACKPOINTER
-                                currentPointer = LEFT;
-                            #endif // ALIGN_WITH_BACKPOINTER
-                        }
                         downCost = (*table)(i - 1, j);
                         gapCost1 = downCost + cost(c1, gapChar);
                         if (gapCost1 < currentCost) 
-                        {
                             currentCost = gapCost1;
-                            #if ALIGN_WITH_BACKPOINTER
-                                currentPointer = DOWN;
-                            #endif // ALIGN_WITH_BACKPOINTER
-                        }
                         (*table)(i, j) = currentCost;
-                        #if ALIGN_WITH_BACKPOINTER
-                            backTable(i, j) = currentPointer;
-                        #endif // ALIGN_WITH_BACKPOINTER
                         leftCost = currentCost;
                         downLeftCost = downCost;
                     } // Update table(i, j) = table(pos + 1, j)
