@@ -30,7 +30,7 @@ On installing ```DNACLUST```, run ```SCRAPT``` as,
 usage: SCRAPT.py [-h] -f FILEPATH -o OUTPUT_DIRECTORY [-s SAMPLING_RATE]
                  [-a ADAPTIVE] [-d DELTA] [-r SIMILARITY] [-n MAX_ITERATIONS]
                  [-k MIN_CLUSTER] [-t NUM_THREADS] [-c COUNTS_DICT]
-                 [-m MODE_SHIFT]
+                 [-m MODE_SHIFT] [-p PROB] [-b REALIZATIONS]
 
 SCRAPT: Sampling Clustering Recruiting AdaPt and iTerate.SCRAPT is a tool to
 cluster phylogenetic marker gene sequences, using an iterative approach.
@@ -69,6 +69,10 @@ optional named arguments:
                         provided SCRAPT deduplicates the sequences.
   -m MODE_SHIFT, --mode_shift MODE_SHIFT
                         Perform Modeshifting. [DEFAULT = True]
+  -p PROB, --prob PROB  Confidence threshold. [DEFAULT = 0.9]
+  -b REALIZATIONS, --realizations REALIZATIONS
+                        Number of realizations to estimate confidence bounds.
+                        [DEFAULT = 1000]
 ```
 
 ## References
