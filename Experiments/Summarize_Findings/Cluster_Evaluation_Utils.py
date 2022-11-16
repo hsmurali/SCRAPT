@@ -93,10 +93,11 @@ def Compute_Fragmentation_Measure(cluster_list, clust_thresh=0):
 def Parse_DNACLUST_Outputs(filepath):
 	dnaclust_counts = open(filepath,'r').readlines()
 	dnaclust_size = []
-	for d in dnaclust_counts:
-		d = d.rstrip()
-		if len(d.split()) >= 2:
-			dnaclust_size.append(len(d.split()))
+	with open(filepath) as fileobject:
+		for d in fileobject:
+			d = d.rstrip()
+			if len(d.split()) >= 2:
+				dnaclust_size.append(len(d.split()))
 	return dnaclust_size
 
 def Parse_CDHIT_Outputs(filepath):

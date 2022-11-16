@@ -871,9 +871,9 @@ int main(int argc, char *argv[])
                     for (int i = 0; i < k_mer_length; ++i)
                         cluster_information::allMaxCounts[i] = new KmerCount[cluster_information::numberOfKmers[i] * numberOfInputSequences * 2];
 
-                   cluster_information::counts = new int *[k_mer_length];
-                   for(int i = 0; i < k_mer_length; ++i)
-                       cluster_information::counts[i] = new int[cluster_information::numberOfKmers[i]];
+                    cluster_information::counts = new int *[k_mer_length];
+                    for(int i = 0; i < k_mer_length; ++i)
+                        cluster_information::counts[i] = new int[cluster_information::numberOfKmers[i]];
                 }
 
              // Allocate allQueryCounts

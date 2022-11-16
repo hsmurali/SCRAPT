@@ -90,7 +90,7 @@ def Cluster_Sequences(sampled_seq_path, dist_cutoff, out_path, counts, num_threa
 
 def Split_Sequences(unclustered_seq_path, split_size, out_dir):
         mkdir(out_dir)
-        command = "seqkit split "+ unclustered_seq_path +" -s " +str(split_size)+ " -O "+out_dir
+        command = "seqkit split -j 16 "+ unclustered_seq_path +" -s " +str(split_size)+ " -O "+out_dir
         subprocess.Popen(command,shell=True).wait()
 
 def Job(cmd):
@@ -117,7 +117,7 @@ def Bait_Sequences_Split_Merge(center_list, unclustered_seq_dir, unclustered_seq
                         seq_path = unclustered_seq_dir + bait_samples[i]
                         dna_clust_op_path = dna_clust_out_dir+'dnaclust.'+str(i)+'.out'
                         dnaclust_bait = prog_path + seq_path + ' -s ' + dist_cutoff + ' -p ' + fnames[1] + ' -r  -t '+ num_threads + ' > ' + dna_clust_op_path
-                        print(dnaclust_bait)
+                        #print(dnaclust_bait)
                         commands.append(dnaclust_bait)
 
         pool = multiprocessing.Pool(int(num_threads))
@@ -231,8 +231,6 @@ def SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, sampling_rate, out
         
         #####CLUSTERING
         cluster_time, cluster_summary = Cluster_Sequences(sampled_seq, str(d_cutoff), out_path, counts, num_threads)
-        print(cluster_summary.head())
-
         ######Split_Fasta_Files
         split_size = min(int(unclustered_seq_count/int(num_threads)), 1000000)
         Split_Sequences(unclustered_seqs, split_size, out_path + '/Split_Seqs/')
@@ -253,7 +251,6 @@ def SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, sampling_rate, out
 
         #####MODE SHIFTING
         if modeshift_flag == True:
-                print(bait_summary.head())
                 try:
                         mode_centroids = bait_summary.loc[(bait_summary['Density'] > 1), 'Mode_Seq'].tolist()
                         op_filenames = [out_path+'/bait_mode.txt', out_path+'/bait_mode.fna', out_path+'/dnaclust_mode_bait']
@@ -308,5 +305,4 @@ def SCRAPT_Iteration(unclustered_seqs, unclustered_seq_count, sampling_rate, out
         d['Time(Total)'] = iter_bm
         d['Iteration'] = iter_id
 
-        print(iter_bm)
         return d, unclustered_seqs
