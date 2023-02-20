@@ -75,5 +75,7 @@ optional named arguments:
                         [DEFAULT = 1000]
 ```
 
+[![DOI](https://zenodo.org/badge/424442689.svg)](https://zenodo.org/badge/latestdoi/424442689)
+
 ## References
 Ghodsi, M., Liu, B. & Pop, M. DNACLUST: accurate and efficient clustering of phylogenetic marker genes. BMC Bioinformatics 12, 271 (2011). https://doi.org/10.1186/1471-2105-12-271
