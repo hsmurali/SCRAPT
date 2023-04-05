@@ -79,3 +79,19 @@ optional named arguments:
 
 ## References
 Ghodsi, M., Liu, B. & Pop, M. DNACLUST: accurate and efficient clustering of phylogenetic marker genes. BMC Bioinformatics 12, 271 (2011). https://doi.org/10.1186/1471-2105-12-271
+
+If you use ```SCRAPT``` for your research, please cite the article published in Nucleic Acids Research.
+```
+@article{10.1093/nar/gkad158,
+    author = {Luan, Tu and Muralidharan, Harihara Subrahmaniam and Alshehri, Marwan and Mittra, Ipsa and Pop, Mihai},
+    title = "{SCRAPT: an iterative algorithm for clustering large 16S rRNA gene data sets}",
+    journal = {Nucleic Acids Research},
+    year = {2023},
+    month = {03},
+    issn = {0305-1048},
+    doi = {10.1093/nar/gkad158},
+    url = {https://doi.org/10.1093/nar/gkad158},
+    note = {gkad158},
+    eprint = {https://academic.oup.com/nar/advance-article-pdf/doi/10.1093/nar/gkad158/49515274/gkad158.pdf},
+}
+```
