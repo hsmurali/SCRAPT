@@ -126,3 +126,173 @@ Iterator2 buildMinTree(Iterator1 first, Iterator1 last, Iterator2 intervalIterat
     }
     return intervalIterator;
 }
+
+template <class RandomAccessIterator>
+RandomAccessIterator median(RandomAccessIterator first, RandomAccessIterator last)
+{
+    RandomAccessIterator mid = first + ((last - first) / 2);
+    std::nth_element(first, mid, last);
+    return mid;
+}
+
+Index twoMeans(const Index l, const Index r, SpectrumIndexVector& spectrumIndexes)
+{
+    KmerCountVector center1(spectrumIndexes[l].first.begin(), spectrumIndexes[l].first.end());
+    KmerCountVector center2(center1.size());
+    {
+        Index i = l + 1;
+        while (spectrumIndexes[l].first == spectrumIndexes[i].first)
+            ++i;
+        std::copy(spectrumIndexes[i].first.begin(), spectrumIndexes[i].first.end(), center2.begin());
+    }
+    assert(center1 != center2);
+    typedef std::vector<int> IntVector;
+    IntVector clusterNumber(r - l, 0);
+    clusterNumber.front() = 1;
+    clusterNumber.back() = 0;
+
+    int clustersChanged = 100000000;
+    int clusterChanges = 0;
+
+
+    KmerCountVector counts1;
+    KmerCountVector counts2;
+
+    counts1.reserve(r - l);
+    counts2.reserve(r - l);
+
+    while((clustersChanged > 0) && ((clusterChanges <= 1) || (clustersChanged > (r - l) / 10))) 
+    {
+        ++clusterChanges;
+        clustersChanged = 0;
+    
+        for (Index i = l; i < r; ++i) 
+        {
+            int d1 = 0;
+            int d2 = 0;
+
+            ConstKmerCountArray spectrum = spectrumIndexes[i].first.data();
+            for (KmerNumber j = 0; j < number_of_k_mers; ++j) {
+                d1 += abs(static_cast<int>(center1[j]) - static_cast<int>(spectrum[j]));
+                d2 += abs(static_cast<int>(center2[j]) - static_cast<int>(spectrum[j]));
+            }
+            if (d1 != d2) 
+            {
+                int newClusterNumber = (d1 < d2) ? 1 : 0;
+                if (newClusterNumber != clusterNumber[i - l]) {
+                    clusterNumber[i - l] = newClusterNumber;
+                    ++clustersChanged;
+                }
+            }
+        } 
+        if (clustersChanged) 
+        { // Find new centers.
+            for (KmerNumber j = 0; j < number_of_k_mers; ++j) 
+            {
+                counts1.clear();
+                counts2.clear();
+                for (Index i = l; i < r; ++i) {
+                    if (clusterNumber[i - l] == 1) {
+                        counts1.push_back(spectrumIndexes[i].first[j]);
+                    } 
+                    else {
+                        counts2.push_back(spectrumIndexes[i].first[j]);
+                    } 
+                }    
+                center1[j] = *median(counts1.begin(), counts1.end());
+                center2[j] = *median(counts2.begin(), counts2.end());
+            } 
+        } 
+    } 
+
+    { 
+        Index i = l;
+        Index j = r - 1;
+        KmerCountVector temp(number_of_k_mers);
+    
+        while (j > i) {
+            while (clusterNumber[i - l] == 1)
+                ++i;
+            while (clusterNumber[j - l] == 0)
+                --j;
+            if (j > i) {
+                std::swap(spectrumIndexes[i], spectrumIndexes[j]);
+                std::swap(clusterNumber[i - l], clusterNumber[j - l]);
+                ++i;
+                --j;
+            } 
+        } 
+    } 
+    Index result = l;
+    while (clusterNumber[result - l] == 1)
+        ++result;
+    for (Index i = result; i < r; ++i)
+        assert(clusterNumber[i - l] == 0);
+    return result;
+} // twoMeans
+
+namespace cluster_information
+{
+    Index *l = 0;
+    Index *r = 0;
+    Index *sizeOfLeftCluster = 0;
+
+    Index *numberOfKmers = 0;
+    KmerCount **allMinCounts = 0;
+    KmerCount **allMaxCounts = 0;
+
+    int **counts = 0;
+}
+
+void clusterSort(const Index l, const Index r, const Index index, SpectrumIndexVector& spectrumIndexes)
+{
+    {
+        for (int k = 0; k < k_mer_length; ++k) {
+            std::fill_n(&cluster_information::allMinCounts[k][index * cluster_information::numberOfKmers[k]], cluster_information::numberOfKmers[k], MAX_COUNT);
+            std::fill_n(&cluster_information::allMaxCounts[k][index * cluster_information::numberOfKmers[k]], cluster_information::numberOfKmers[k], MIN_COUNT);
+        }
+        for (Index i = l; i < r; ++i) {
+            for (int k = 0; k < k_mer_length; ++k)
+                std::fill_n(cluster_information::counts[k], cluster_information::numberOfKmers[k], 0);
+            std::copy (spectrumIndexes[i].first.begin(), spectrumIndexes[i].first.end(), cluster_information::counts[k_mer_length - 1]);
+            for (int k = k_mer_length - 1; k > 0; --k)
+                for (int j = 0; j < cluster_information::numberOfKmers[k]; ++j) {
+                    int j_prime = j / static_cast<int>(NUMBER_OF_NUCLEOTIDES);
+                    cluster_information::counts[k - 1][j_prime] += cluster_information::counts[k][j];
+                }
+            for (int k = 0; k < k_mer_length; ++k)
+                for (int j = 0; j < cluster_information::numberOfKmers[k]; ++j) {
+                    KmerCount count = MAX_COUNT;
+                    if (cluster_information::counts[k][j] < MAX_COUNT)
+                        count = cluster_information::counts[k][j];
+                    KmerCount &minCount = cluster_information::allMinCounts[k][index * cluster_information::numberOfKmers[k] + j];
+                    KmerCount &maxCount = cluster_information::allMaxCounts[k][index * cluster_information::numberOfKmers[k] + j];
+
+                    if (minCount > count)
+                        minCount = count;
+                    if (maxCount < count)
+                        maxCount = count;
+                }
+        } 
+        cluster_information::l[index] = l;
+        cluster_information::r[index] = r;
+    }
+    bool allEqual = true;
+    {
+        for (KmerNumber j = 0; j < number_of_k_mers; ++j) 
+        {
+            KmerCount &minCount = cluster_information::allMinCounts[k_mer_length - 1][index * cluster_information::numberOfKmers[k_mer_length - 1] + j];
+            KmerCount &maxCount = cluster_information::allMaxCounts[k_mer_length - 1][index * cluster_information::numberOfKmers[k_mer_length - 1] + j];
+            if (minCount < maxCount)    
+                allEqual = false;
+        }
+    }
+    if (allEqual) {
+        cluster_information::sizeOfLeftCluster[index] = NULL_INDEX;
+        return;
+    }
+    Index mid = twoMeans(l, r, spectrumIndexes);
+    cluster_information::sizeOfLeftCluster[index] = mid - l;
+    clusterSort(l, mid, index + 1, spectrumIndexes);
+    clusterSort(mid, r, index + 2 * (mid - l), spectrumIndexes);
+}

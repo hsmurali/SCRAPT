@@ -7,7 +7,7 @@
 #SBATCH --time=5-00:00:00
 #SBATCH --qos=large
 #SBATCH --mem=36gb
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=16
 #SBATCH --nodelist=tern00
 
 module load cdhit

@@ -8,6 +8,9 @@ typedef intptr_t Index;
 typedef int32_t CostType;
 typedef std::vector<Index> IndexVector;
 typedef std::vector<char> BoolVector;
+enum BackPointer {LEFT, DOWN, DOWN_LEFT, ROOT};
+typedef multi_dim::Matrix<CostType> DpTable;
+typedef multi_dim::Matrix<BackPointer> BackPointerTable;
 
 const CharType endOfStringChar = '\0';
 const CharType invalidChar = '^';

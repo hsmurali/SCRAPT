@@ -4,7 +4,61 @@
   Output:
   Global: searchResults.
 */
+namespace layered 
+{
+    int layeredMaxMoreThresholds[MAXIMUM_K_MER_LENGTH];
+    int layeredMinMoreThresholds[MAXIMUM_K_MER_LENGTH];
 
+    int **allQueryCounts = 0;
+
+    int layeredClusterSearch(Index index, int k, IndexVector &clusterSearchResults)
+    {
+    
+        int maxMore = 0;
+        int minMore = 0;
+        int numberOfKmers = cluster_information::numberOfKmers[k];
+        KmerCount *minCounts = &cluster_information::allMinCounts[k][index * numberOfKmers];
+        KmerCount *maxCounts = &cluster_information::allMaxCounts[k][index * numberOfKmers];
+        int minMoreThreshold = layeredMinMoreThresholds[k];
+        int maxMoreThreshold = layeredMaxMoreThresholds[k];
+        int *queryCounts = allQueryCounts[k];
+        {
+            int minCount;
+            int maxCount;
+            int queryCount;
+            for (Index i = 0; i < numberOfKmers; ++i) 
+            {
+                maxCount = maxCounts[i];
+                queryCount = queryCounts[i];
+                if (maxCount > queryCount) 
+                {
+                    maxMore += maxCount - queryCount;
+                    minCount = minCounts[i];
+                    if (minCount > queryCount) 
+                    { 
+                        minMore += minCount - queryCount;
+                        if (minMore > minMoreThreshold) {
+                            return 0;
+                        } 
+                        if (approximateFilter2 && minMore * (cluster_information::r[index] - cluster_information::l[index]) > minMoreThreshold)
+                            return 0;
+                    } 
+                } 
+            } // for (Index i = 0; i < numberOfKmers; ++i)
+        }
+        if (maxMore <= maxMoreThreshold) 
+        {
+            if (k + 1 < k_mer_length) 
+            {
+                return layeredClusterSearch(index, k + 1, clusterSearchResults);
+            }
+            for (Index i = cluster_information::l[index]; i < cluster_information::r[index]; ++i)
+                clusterSearchResults.push_back(i);
+            return cluster_information::r[index] - cluster_information::l[index];
+        }
+        return (layeredClusterSearch(index + 1, k, clusterSearchResults) + layeredClusterSearch(index + 2 * cluster_information::sizeOfLeftCluster[index], k, clusterSearchResults));
+    }
+} 
 
 void search_without_backpointer(const PositionType l, const PositionType r, PositionType pos, const Index intervalIndex, const uint16_t tableIndex, const int globalOffset)
 {
@@ -130,4 +184,17 @@ void search_without_backpointer(const PositionType l, const PositionType r, Posi
         } // if (word[pos + 1] != sortedStrings[l][pos])
     
     }while ((*localMinCost)[++pos] <= maxLengthRadious);
+}
+
+void *threaded_search_without_backpointer(void *read_args) 
+{
+    struct thread_args *args = static_cast<struct thread_args *>(read_args);
+    const PositionType l = args->l;
+    const PositionType r = args->r;
+    PositionType pos = args->pos;
+    const Index intervalIndex = args->intervalIndex;
+    const uint16_t tableIndex = args->tableIndex;
+    const int globalOffset = args->globalOffset;
+    search_without_backpointer(l, r, pos, intervalIndex, tableIndex, globalOffset);
+    return NULL;
 }

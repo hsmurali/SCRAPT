@@ -18,31 +18,18 @@
 #include "utility.hpp"
 #include "kmer_utils.hpp"
 
-enum BackPointer {LEFT, DOWN, DOWN_LEFT, ROOT};
-
-typedef multi_dim::Matrix<KmerCount> CountMatrix;
-typedef multi_dim::Matrix<CostType> DpTable;
-typedef multi_dim::Matrix<BackPointer> BackPointerTable;
-
 uint16_t running_threads = 0;
 size_t num_threads = 1;
 int threads_completed = 0;
-pthread_mutex_t running_mutex;
-pthread_t searchWorkers[MAX_THREADS];
-struct Context searchWorkersContext[MAX_THREADS];
 struct thread_args searchWorkersArgs[MAX_THREADS];
 pthread_mutex_t searchWorkersMutexes[MAX_THREADS];
 pthread_cond_t searchWorkersConds[MAX_THREADS];
 pthread_cond_t searchWorkersCompleted;
 pthread_mutex_t allThreadsMutex;
 
-CountMatrix spectrumMatrix;
-IndexVector spectrumSplitGuide, lexicographicIndexOfSortedStringsIndexes, lexicographicIndexOfSpectrumIndexes, spectrumSearchResults;
-KmerSpectrum querySpectrum, queryLowSpectrum;
-PositionVector spectrumRemainingGuide;
+IndexVector lexicographicIndexOfSortedStringsIndexes;
 SpectrumIndexVector spectrumIndexes;
 
-SequenceNumber numberOfInputSequences;
 ConstCharPointerVector sortedStrings, lexicographicSequencePointers, headerPointers;
 PositionVector headerLengths, sequenceLengths;
 ConstCharPointer querySequencePointer, queryHeaderPointer;
@@ -61,7 +48,6 @@ SearchResultVector searchResults;
 std::vector< SearchResultVector > threadSearchResults(MAX_THREADS);
 std::vector< PositionVector > sortedStringsLengthsMinTree(MAX_THREADS);
 std::vector< PositionVector > sortedStringsLengthsMaxTree(MAX_THREADS);
-int resultsCounter[MAX_THREADS];
 
 CostType radious;
 DpTable *tables[MAX_THREADS];
@@ -110,253 +96,7 @@ BoolVector marked;
 BoolVector markedGrey;
 int numberOfMarked;
 int remainingAtLastDbUpdate;
-
-sequence::Fasta inputFasta;
-sequence::Fasta predeterminedCentersFasta;
-
-template <class RandomAccessIterator>
-RandomAccessIterator median(RandomAccessIterator first, RandomAccessIterator last)
-{
-    RandomAccessIterator mid = first + ((last - first) / 2);
-    std::nth_element(first, mid, last);
-    return mid;
-}
-
-Index twoMeans(const Index l, const Index r)
-{
-    KmerCountVector center1(spectrumIndexes[l].first.begin(), spectrumIndexes[l].first.end());
-    KmerCountVector center2(center1.size());
-    {
-        Index i = l + 1;
-        while (spectrumIndexes[l].first == spectrumIndexes[i].first)
-            ++i;
-        std::copy(spectrumIndexes[i].first.begin(), spectrumIndexes[i].first.end(), center2.begin());
-    }
-    assert(center1 != center2);
-    typedef std::vector<int> IntVector;
-    IntVector clusterNumber(r - l, 0);
-    clusterNumber.front() = 1;
-    clusterNumber.back() = 0;
-
-    int clustersChanged = 100000000;
-    int clusterChanges = 0;
-
-
-    KmerCountVector counts1;
-    KmerCountVector counts2;
-
-    counts1.reserve(r - l);
-    counts2.reserve(r - l);
-
-    while((clustersChanged > 0) && ((clusterChanges <= 1) || (clustersChanged > (r - l) / 10))) 
-    {
-        ++clusterChanges;
-        clustersChanged = 0;
-    
-        for (Index i = l; i < r; ++i) 
-        {
-            int d1 = 0;
-            int d2 = 0;
-
-            ConstKmerCountArray spectrum = spectrumIndexes[i].first.data();
-            for (KmerNumber j = 0; j < number_of_k_mers; ++j) {
-                d1 += abs(static_cast<int>(center1[j]) - static_cast<int>(spectrum[j]));
-                d2 += abs(static_cast<int>(center2[j]) - static_cast<int>(spectrum[j]));
-            }
-            if (d1 != d2) 
-            {
-                int newClusterNumber = (d1 < d2) ? 1 : 0;
-                if (newClusterNumber != clusterNumber[i - l]) {
-                    clusterNumber[i - l] = newClusterNumber;
-                    ++clustersChanged;
-                }
-            }
-        } 
-        if (clustersChanged) 
-        { // Find new centers.
-            for (KmerNumber j = 0; j < number_of_k_mers; ++j) 
-            {
-                counts1.clear();
-                counts2.clear();
-                for (Index i = l; i < r; ++i) {
-                    if (clusterNumber[i - l] == 1) {
-                        counts1.push_back(spectrumIndexes[i].first[j]);
-                    } 
-                    else {
-                        counts2.push_back(spectrumIndexes[i].first[j]);
-                    } 
-                }    
-                center1[j] = *median(counts1.begin(), counts1.end());
-                center2[j] = *median(counts2.begin(), counts2.end());
-            } 
-        } 
-    } 
-
-    { 
-        Index i = l;
-        Index j = r - 1;
-        KmerCountVector temp(number_of_k_mers);
-    
-        while (j > i) {
-            while (clusterNumber[i - l] == 1)
-                ++i;
-            while (clusterNumber[j - l] == 0)
-                --j;
-            if (j > i) {
-                std::swap(spectrumIndexes[i], spectrumIndexes[j]);
-                std::swap(clusterNumber[i - l], clusterNumber[j - l]);
-                ++i;
-                --j;
-            } 
-        } 
-    } 
-    Index result = l;
-    while (clusterNumber[result - l] == 1)
-        ++result;
-    for (Index i = result; i < r; ++i)
-        assert(clusterNumber[i - l] == 0);
-    return result;
-} // twoMeans
-
-
-namespace cluster_information
-{
-    Index *l = 0;
-    Index *r = 0;
-    Index *sizeOfLeftCluster = 0;
-
-    Index *numberOfKmers = 0;
-    KmerCount **allMinCounts = 0;
-    KmerCount **allMaxCounts = 0;
-
-    int **counts = 0;
-}
-
-void clusterSort(const Index l, const Index r, const Index index)
-{
-    {
-        for (int k = 0; k < k_mer_length; ++k) {
-            std::fill_n(&cluster_information::allMinCounts[k][index * cluster_information::numberOfKmers[k]], cluster_information::numberOfKmers[k], MAX_COUNT);
-            std::fill_n(&cluster_information::allMaxCounts[k][index * cluster_information::numberOfKmers[k]], cluster_information::numberOfKmers[k], MIN_COUNT);
-        }
-        for (Index i = l; i < r; ++i) {
-            for (int k = 0; k < k_mer_length; ++k)
-                std::fill_n(cluster_information::counts[k], cluster_information::numberOfKmers[k], 0);
-            std::copy (spectrumIndexes[i].first.begin(), spectrumIndexes[i].first.end(), cluster_information::counts[k_mer_length - 1]);
-            for (int k = k_mer_length - 1; k > 0; --k)
-                for (int j = 0; j < cluster_information::numberOfKmers[k]; ++j) {
-                    int j_prime = j / static_cast<int>(NUMBER_OF_NUCLEOTIDES);
-                    cluster_information::counts[k - 1][j_prime] += cluster_information::counts[k][j];
-                }
-            for (int k = 0; k < k_mer_length; ++k)
-                for (int j = 0; j < cluster_information::numberOfKmers[k]; ++j) {
-                    KmerCount count = MAX_COUNT;
-                    if (cluster_information::counts[k][j] < MAX_COUNT)
-                        count = cluster_information::counts[k][j];
-                    KmerCount &minCount = cluster_information::allMinCounts[k][index * cluster_information::numberOfKmers[k] + j];
-                    KmerCount &maxCount = cluster_information::allMaxCounts[k][index * cluster_information::numberOfKmers[k] + j];
-
-                    if (minCount > count)
-                        minCount = count;
-                    if (maxCount < count)
-                        maxCount = count;
-                }
-        } 
-        cluster_information::l[index] = l;
-        cluster_information::r[index] = r;
-    }
-    bool allEqual = true;
-    {
-        for (KmerNumber j = 0; j < number_of_k_mers; ++j) 
-        {
-            KmerCount &minCount = cluster_information::allMinCounts[k_mer_length - 1][index * cluster_information::numberOfKmers[k_mer_length - 1] + j];
-            KmerCount &maxCount = cluster_information::allMaxCounts[k_mer_length - 1][index * cluster_information::numberOfKmers[k_mer_length - 1] + j];
-            if (minCount < maxCount)    
-                allEqual = false;
-        }
-    }
-    if (allEqual) {
-        cluster_information::sizeOfLeftCluster[index] = NULL_INDEX;
-        return;
-    }
-    Index mid = twoMeans(l, r);
-    cluster_information::sizeOfLeftCluster[index] = mid - l;
-    clusterSort(l, mid, index + 1);
-    clusterSort(mid, r, index + 2 * (mid - l));
-}
-
 IndexVector clusterSearchResults;
-
-namespace layered 
-{
-
-    int layeredMaxMoreThresholds[MAXIMUM_K_MER_LENGTH];
-    int layeredMinMoreThresholds[MAXIMUM_K_MER_LENGTH];
-
-    int **allQueryCounts = 0;
-
-    int layeredClusterSearch(Index index, int k)
-    {
-    
-        int maxMore = 0;
-        int minMore = 0;
-        int numberOfKmers = cluster_information::numberOfKmers[k];
-        KmerCount *minCounts = &cluster_information::allMinCounts[k][index * numberOfKmers];
-        KmerCount *maxCounts = &cluster_information::allMaxCounts[k][index * numberOfKmers];
-        int minMoreThreshold = layeredMinMoreThresholds[k];
-        int maxMoreThreshold = layeredMaxMoreThresholds[k];
-        int *queryCounts = allQueryCounts[k];
-        {
-            int minCount;
-            int maxCount;
-            int queryCount;
-            for (Index i = 0; i < numberOfKmers; ++i) 
-            {
-                maxCount = maxCounts[i];
-                queryCount = queryCounts[i];
-                if (maxCount > queryCount) 
-                {
-                    maxMore += maxCount - queryCount;
-                    minCount = minCounts[i];
-                    if (minCount > queryCount) 
-                    { 
-                        minMore += minCount - queryCount;
-                        if (minMore > minMoreThreshold) {
-                            return 0;
-                        } 
-                        if (approximateFilter2 && minMore * (cluster_information::r[index] - cluster_information::l[index]) > minMoreThreshold)
-                            return 0;
-                    } 
-                } 
-            } // for (Index i = 0; i < numberOfKmers; ++i)
-        }
-        if (maxMore <= maxMoreThreshold) 
-        {
-            if (k + 1 < k_mer_length) 
-            {
-                return layeredClusterSearch(index, k + 1);
-            }
-            for (Index i = cluster_information::l[index]; i < cluster_information::r[index]; ++i)
-                clusterSearchResults.push_back(i);
-            return cluster_information::r[index] - cluster_information::l[index];
-        }
-        return (layeredClusterSearch(index + 1, k) + layeredClusterSearch(index + 2 * cluster_information::sizeOfLeftCluster[index], k));
-    }
-} 
-
-void *threaded_search_without_backpointer(void *read_args) 
-{
-    struct thread_args *args = static_cast<struct thread_args *>(read_args);
-    const PositionType l = args->l;
-    const PositionType r = args->r;
-    PositionType pos = args->pos;
-    const Index intervalIndex = args->intervalIndex;
-    const uint16_t tableIndex = args->tableIndex;
-    const int globalOffset = args->globalOffset;
-    search_without_backpointer(l, r, pos, intervalIndex, tableIndex, globalOffset);
-    return NULL;
-}
-
 
 void *threadWorker(void *context) 
 {
@@ -376,7 +116,6 @@ void *threadWorker(void *context)
     return NULL;
 }
 
-
 /*
   Input: 'queryString', 'queryLength', 'queryHeader', 'queryHeaderLength' should be set.
   Database: 'sortedStrings' contains the strings to be clusterd in lexicographically sorted order. After making a cluster the sequences are removed from this vector.
@@ -385,6 +124,8 @@ void *threadWorker(void *context)
 
 void makeCluster()
 {
+    KmerSpectrum querySpectrum;
+    
     radious = static_cast<CostType>(floor((1 - similarity) * querySequenceLength));
     if (mismatches >= 0)
         radious = static_cast<CostType>(mismatches);
@@ -427,7 +168,7 @@ void makeCluster()
                 layered::layeredMinMoreThresholds[i] = radious * (i + 1);
             }
         } 
-        layered::layeredClusterSearch(0, 0);
+        layered::layeredClusterSearch(0, 0, clusterSearchResults);
     } // if (! noKmerFilter)
     IndexVector unmarkeds;
     if (! noKmerFilter) 
@@ -546,91 +287,90 @@ void makeCluster()
             threadSearchResults[i].clear();
         }
     }
-    { 
-        typedef std::vector<PositionType> CountsVector;
-        // This vector will contain the maximum number of gaps that happen after position [i] in query string in ANY of the alignments to search results.
-        CountsVector gapCounts(querySequenceLength);
-        // This string will contain the query sequence with appropriate number of gaps inserted at each position to produce a multiple alignment of the cluster.
-        std::string clusterCenterSequenceWithGaps;
-        if (useFullQueryHeader) 
-        {
-            if (!assignAmbiguous)
-                std::cout << queryHeaderPointer << '\t';
-            else 
-                if (!printInvertedIndex)
-                    center_nonambig_counts[queryHeaderPointer] = 1;
-        } 
-        else 
-        {
-            if (!assignAmbiguous)
-                std::cout << firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength) << '\t';
-            else
-                if (!printInvertedIndex)
-                    center_nonambig_counts[firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength)] = 1;
-        }
-        for (SearchResultVector::const_iterator resultIterator = searchResults.begin(); resultIterator != searchResults.end(); ++resultIterator) 
-        {
-            Index lexicographicIndex;
-            if (! noKmerFilter)
-                lexicographicIndex = unmarkeds[resultIterator->number];
-            else
-                lexicographicIndex = lexicographicIndexOfSortedStringsIndexes[resultIterator->number];
-            if (!assignAmbiguous)
-                markedGrey[lexicographicIndex] = true;
-            if ((!noOverlap) || resultIterator->cost < radious / 2) 
-            {
-                if (!marked[lexicographicIndex]) 
-                {
-                    if (!assignAmbiguous) {
-                        marked[lexicographicIndex] = true;
-                        ++numberOfMarked;
-                    }
-                    ConstCharPointer headerPointer = headerPointers[lexicographicIndex];
-                    PositionType headerLength = headerLengths[lexicographicIndex];
-                    if (useFullQueryHeader) {
-                        if (!assignAmbiguous)
-                            std::cout << headerPointer << '\t';
-                        else {
-                            if (printInvertedIndex)
-                                std::cout << headerPointer << '\t' << queryHeaderPointer << '\n';
-                            else {
-                                inverted_index[headerPointer].push_back(queryHeaderPointer);
-                                if (inverted_index[headerPointer].size() == 1)
-                                    center_nonambig_counts[queryHeaderPointer] += 1;
-                                else if (inverted_index[headerPointer].size() == 2)
-                                    center_nonambig_counts[inverted_index[headerPointer][0]] -= 1;
-                            }
-                        }
-                    } 
-                    else {
-                        if (!assignAmbiguous)
-                            std::cout << firstWord(headerPointer, headerPointer + headerLength) << '\t';
-                        else {
-                            if (printInvertedIndex)
-                                std::cout << firstWord(headerPointer, headerPointer + headerLength) << '\t' 
-                                          << firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength) << '\n';
-                            else {
-                                inverted_index[firstWord(headerPointer, headerPointer + headerLength)].push_back(
-                                               firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength));
-                                if (inverted_index[firstWord(headerPointer, headerPointer + headerLength)].size() == 1)
-                                    center_nonambig_counts[firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength)] += 1;
-                                else if (inverted_index[firstWord(headerPointer, headerPointer + headerLength)].size() == 2) 
-                                    center_nonambig_counts[inverted_index[firstWord(headerPointer, headerPointer + headerLength)][0]] -= 1;
-                            }
-                        }
-                    }
-                } // if (!marked[lexicographicIndex])
-            } // if ((!noOverlap) || resultIterator->cost < radious / 2)
-        } // for
-  
+    //{ 
+    typedef std::vector<PositionType> CountsVector;
+    // This vector will contain the maximum number of gaps that happen after position [i] in query string in ANY of the alignments to search results.
+    CountsVector gapCounts(querySequenceLength);
+    // This string will contain the query sequence with appropriate number of gaps inserted at each position to produce a multiple alignment of the cluster.
+    std::string clusterCenterSequenceWithGaps;
+    if (useFullQueryHeader) 
+    {
         if (!assignAmbiguous)
-            std::cout << '\n';
-    } // Output cluster alignment.
+            std::cout << queryHeaderPointer << '\t';
+        else 
+            if (!printInvertedIndex)
+                center_nonambig_counts[queryHeaderPointer] = 1;
+    } 
+    else 
+    {
+        if (!assignAmbiguous)
+            std::cout << firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength) << '\t';
+        else
+            if (!printInvertedIndex)
+                center_nonambig_counts[firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength)] = 1;
+    }
+    for (SearchResultVector::const_iterator resultIterator = searchResults.begin(); resultIterator != searchResults.end(); ++resultIterator) 
+    {
+        Index lexicographicIndex;
+        if (! noKmerFilter)
+            lexicographicIndex = unmarkeds[resultIterator->number];
+        else
+            lexicographicIndex = lexicographicIndexOfSortedStringsIndexes[resultIterator->number];
+        if (!assignAmbiguous)
+            markedGrey[lexicographicIndex] = true;
+        if ((!noOverlap) || resultIterator->cost < radious / 2) 
+        {
+            if (!marked[lexicographicIndex]) 
+            {
+                if (!assignAmbiguous) {
+                    marked[lexicographicIndex] = true;
+                    ++numberOfMarked;
+                }
+                ConstCharPointer headerPointer = headerPointers[lexicographicIndex];
+                PositionType headerLength = headerLengths[lexicographicIndex];
+                if (useFullQueryHeader) {
+                    if (!assignAmbiguous)
+                        std::cout << headerPointer << '\t';
+                    else {
+                        if (printInvertedIndex)
+                            std::cout << headerPointer << '\t' << queryHeaderPointer << '\n';
+                        else {
+                            inverted_index[headerPointer].push_back(queryHeaderPointer);
+                            if (inverted_index[headerPointer].size() == 1)
+                                center_nonambig_counts[queryHeaderPointer] += 1;
+                            else if (inverted_index[headerPointer].size() == 2)
+                                center_nonambig_counts[inverted_index[headerPointer][0]] -= 1;
+                        }
+                    }
+                } 
+                else {
+                    if (!assignAmbiguous)
+                        std::cout << firstWord(headerPointer, headerPointer + headerLength) << '\t';
+                    else {
+                        if (printInvertedIndex)
+                            std::cout << firstWord(headerPointer, headerPointer + headerLength) << '\t' 
+                                        << firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength) << '\n';
+                        else {
+                            inverted_index[firstWord(headerPointer, headerPointer + headerLength)].push_back(
+                                            firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength));
+                            if (inverted_index[firstWord(headerPointer, headerPointer + headerLength)].size() == 1)
+                                center_nonambig_counts[firstWord(queryHeaderPointer, queryHeaderPointer + queryHeaderLength)] += 1;
+                            else if (inverted_index[firstWord(headerPointer, headerPointer + headerLength)].size() == 2) 
+                                center_nonambig_counts[inverted_index[firstWord(headerPointer, headerPointer + headerLength)][0]] -= 1;
+                        }
+                    }
+                }
+            } // if (!marked[lexicographicIndex])
+        } // if ((!noOverlap) || resultIterator->cost < radious / 2)
+    } // for
+
+    if (!assignAmbiguous)
+        std::cout << '\n';
+    // Output cluster alignment.
 }
 
 int main(int argc, char *argv[])
-{
-    { 
+{ 
         argparse::ArgumentParser program("DNACLUST");
         program.add_description("   The output is written to STDOUT.\n"
                         "Each line will contain the ids of the sequences in each cluster," 
@@ -652,7 +392,7 @@ int main(int argc, char *argv[])
         
         program.add_argument("-p","--predetermined-cluster-centers")
             .help("file containing predetermined cluster centers")
-            .default_value(std::string{""});//.scan<'i',std::string>();
+            .default_value(std::string{""});
 
         program.add_argument("-r", "--recruit-only")
             .help("when used with predetermined-cluster-centers option, only clusters the input sequences that are similar to the predetermined centers")
@@ -708,6 +448,9 @@ int main(int argc, char *argv[])
             
         program.parse_args(argc, argv);
 
+        SequenceNumber numberOfInputSequences;
+        sequence::Fasta inputFasta, predeterminedCentersFasta;
+
         similarity = program.get<float>("-s");
         std::string inputFileName = program.get("-i");
         std::string predeterminedCentersFileName = program.get("-p");
@@ -742,6 +485,8 @@ int main(int argc, char *argv[])
         inputFile >> inputFasta;
         numberOfInputSequences = inputFasta.size();
         // Initialize all threads.
+        pthread_t searchWorkers[MAX_THREADS];
+        struct Context searchWorkersContext[MAX_THREADS];
         for (size_t i = 0; i < MAX_THREADS; ++i) 
         {
             pthread_mutex_init(&searchWorkersMutexes[i], NULL);
@@ -750,6 +495,7 @@ int main(int argc, char *argv[])
             searchWorkersContext[i].id = i;
             pthread_create(&searchWorkers[i], NULL, threadWorker, static_cast<void *>(&searchWorkersContext[i]));
         }
+        pthread_mutex_t running_mutex;
         pthread_mutex_init(&allThreadsMutex, NULL);
         pthread_cond_init(&searchWorkersCompleted, NULL);
         pthread_mutex_init(&running_mutex, NULL);
@@ -789,50 +535,49 @@ int main(int argc, char *argv[])
         }
         // Initializing this at the beginning is crucial.
         number_of_k_mers = power(static_cast<int>(NUMBER_OF_NUCLEOTIDES), k_mer_length);
-    }
-    {
-        { // Calculate global vectors indexed by 'lexicographical index': lexicographicalSequencePointers, sequenceLengths, headerPointers, headerLengths
-            typedef std::pair<ConstCharPointer, Index> PointerIndexPair;
-            typedef std::vector<PointerIndexPair> PointerIndexVector;
-            PointerIndexVector pointerFastaIndexes(numberOfInputSequences);
-            lexicographicSequencePointers.resize(numberOfInputSequences);
-            for (Index i = 0; i < numberOfInputSequences; ++i)
-            {
-                lexicographicSequencePointers[i] = inputFasta[i].sequence.c_str();
-                pointerFastaIndexes[i].first = inputFasta[i].sequence.c_str();
-                pointerFastaIndexes[i].second = i;
-            }
-            ternary_sort::ternarySort(lexicographicSequencePointers.data(), numberOfInputSequences);
-            std::sort(pointerFastaIndexes.begin(), pointerFastaIndexes.end());
-            PointerIndexVector pointerLexicographicIndexes(numberOfInputSequences);
-            for (Index i = 0; i < numberOfInputSequences; ++i) 
-            {
-                pointerLexicographicIndexes[i].first = lexicographicSequencePointers[i];
-                pointerLexicographicIndexes[i].second = i;
-            }
+    
+        // Calculate global vectors indexed by 'lexicographical index': lexicographicalSequencePointers, sequenceLengths, headerPointers, headerLengths
+        typedef std::pair<ConstCharPointer, Index> PointerIndexPair;
+        typedef std::vector<PointerIndexPair> PointerIndexVector;
+        PointerIndexVector pointerFastaIndexes(numberOfInputSequences);
+        lexicographicSequencePointers.resize(numberOfInputSequences);
+        for (Index i = 0; i < numberOfInputSequences; ++i)
+        {
+            lexicographicSequencePointers[i] = inputFasta[i].sequence.c_str();
+            pointerFastaIndexes[i].first = inputFasta[i].sequence.c_str();
+            pointerFastaIndexes[i].second = i;
+        }
+        ternary_sort::ternarySort(lexicographicSequencePointers.data(), numberOfInputSequences);
+        std::sort(pointerFastaIndexes.begin(), pointerFastaIndexes.end());
+        PointerIndexVector pointerLexicographicIndexes(numberOfInputSequences);
+        for (Index i = 0; i < numberOfInputSequences; ++i) 
+        {
+            pointerLexicographicIndexes[i].first = lexicographicSequencePointers[i];
+            pointerLexicographicIndexes[i].second = i;
+        }
 
-            std::sort(pointerLexicographicIndexes.begin(), pointerLexicographicIndexes.end());
-            IndexVector fastaIndexOfLexicographicIndexes(numberOfInputSequences);
-            IndexVector lexicographicIndexOfFastaIndexes(numberOfInputSequences);
-            for (Index i = 0; i < numberOfInputSequences; ++i) 
-            {
-                assert(pointerFastaIndexes[i].first == pointerLexicographicIndexes[i].first);
-                fastaIndexOfLexicographicIndexes[pointerLexicographicIndexes[i].second] = pointerFastaIndexes[i].second;
-                lexicographicIndexOfFastaIndexes[pointerFastaIndexes[i].second] = pointerLexicographicIndexes[i].second;
-            }
+        std::sort(pointerLexicographicIndexes.begin(), pointerLexicographicIndexes.end());
+        IndexVector fastaIndexOfLexicographicIndexes(numberOfInputSequences);
+        IndexVector lexicographicIndexOfFastaIndexes(numberOfInputSequences);
+        for (Index i = 0; i < numberOfInputSequences; ++i) 
+        {
+            assert(pointerFastaIndexes[i].first == pointerLexicographicIndexes[i].first);
+            fastaIndexOfLexicographicIndexes[pointerLexicographicIndexes[i].second] = pointerFastaIndexes[i].second;
+            lexicographicIndexOfFastaIndexes[pointerFastaIndexes[i].second] = pointerLexicographicIndexes[i].second;
+        }
 
-            headerPointers.resize(numberOfInputSequences);
-            headerLengths.resize(numberOfInputSequences);
-            sequenceLengths.resize(numberOfInputSequences);
+        headerPointers.resize(numberOfInputSequences);
+        headerLengths.resize(numberOfInputSequences);
+        sequenceLengths.resize(numberOfInputSequences);
 
-            for (Index i = 0; i < numberOfInputSequences; ++i) 
-            {
-                Index fastaIndex = fastaIndexOfLexicographicIndexes[i];
-                headerPointers[i] = inputFasta[fastaIndex].header.c_str();
-                headerLengths[i] = inputFasta[fastaIndex].header.length();
-                sequenceLengths[i] = inputFasta[fastaIndex].sequence.length();
-            }
-        } // Calculate global vectors indexed by 'lexicographical index': lexicographicalSequencePointers, sequenceLengths, headerPointers, headerLengths
+        for (Index i = 0; i < numberOfInputSequences; ++i) 
+        {
+            Index fastaIndex = fastaIndexOfLexicographicIndexes[i];
+            headerPointers[i] = inputFasta[fastaIndex].header.c_str();
+            headerLengths[i] = inputFasta[fastaIndex].header.length();
+            sequenceLengths[i] = inputFasta[fastaIndex].sequence.length();
+        }
+        //} // Calculate global vectors indexed by 'lexicographical index': lexicographicalSequencePointers, sequenceLengths, headerPointers, headerLengths
 
         typedef std::pair<PositionType, Index> LengthIndexPair;
         typedef std::vector<LengthIndexPair> LengthIndexVector;
@@ -853,40 +598,31 @@ int main(int argc, char *argv[])
                 spectrumIndexes[i].first = countKmers(lexicographicSequencePointers[i], sequenceLengths[i]);
                 spectrumIndexes[i].second = i;
             }
-            { 
-                {
-                    cluster_information::l = new Index[2 * numberOfInputSequences];
-                    cluster_information::r = new Index[2 * numberOfInputSequences];
-                    cluster_information::sizeOfLeftCluster = new Index[2 * numberOfInputSequences];
-                    cluster_information::numberOfKmers = new Index[k_mer_length];
-                    
-                    for (int i = 0; i < k_mer_length; ++i)
-                        cluster_information::numberOfKmers[i] = power(static_cast<int>(NUMBER_OF_NUCLEOTIDES), i + 1);
+            
+            cluster_information::l = new Index[2 * numberOfInputSequences];
+            cluster_information::r = new Index[2 * numberOfInputSequences];
+            cluster_information::sizeOfLeftCluster = new Index[2 * numberOfInputSequences];
+            cluster_information::numberOfKmers = new Index[k_mer_length];
+            
+            for (int i = 0; i < k_mer_length; ++i)
+                cluster_information::numberOfKmers[i] = power(static_cast<int>(NUMBER_OF_NUCLEOTIDES), i + 1);
 
-                    cluster_information::allMinCounts = new KmerCount *[k_mer_length];
-                    for (int i = 0; i < k_mer_length; ++i)
-                        cluster_information::allMinCounts[i] = new KmerCount[cluster_information::numberOfKmers[i] * numberOfInputSequences * 2];
+            cluster_information::allMinCounts = new KmerCount *[k_mer_length];
+            for (int i = 0; i < k_mer_length; ++i)
+                cluster_information::allMinCounts[i] = new KmerCount[cluster_information::numberOfKmers[i] * numberOfInputSequences * 2];
 
-                    cluster_information::allMaxCounts = new KmerCount *[k_mer_length];
-                    for (int i = 0; i < k_mer_length; ++i)
-                        cluster_information::allMaxCounts[i] = new KmerCount[cluster_information::numberOfKmers[i] * numberOfInputSequences * 2];
+            cluster_information::allMaxCounts = new KmerCount *[k_mer_length];
+            for (int i = 0; i < k_mer_length; ++i)
+                cluster_information::allMaxCounts[i] = new KmerCount[cluster_information::numberOfKmers[i] * numberOfInputSequences * 2];
 
-                    cluster_information::counts = new int *[k_mer_length];
-                    for(int i = 0; i < k_mer_length; ++i)
-                        cluster_information::counts[i] = new int[cluster_information::numberOfKmers[i]];
-                }
-
-             // Allocate allQueryCounts
-                {
-                   layered::allQueryCounts = new int *[k_mer_length];
-                   for (int i = 0; i < k_mer_length; ++i)
-                   layered::allQueryCounts[i] = new int[cluster_information::numberOfKmers[i]];
-                }
-                {
-                   clusterSort(0, numberOfInputSequences, 0);
-                   remainingAtLastDbUpdate = numberOfInputSequences;
-                }
-            }
+            cluster_information::counts = new int *[k_mer_length];
+            for(int i = 0; i < k_mer_length; ++i)
+                cluster_information::counts[i] = new int[cluster_information::numberOfKmers[i]];
+            layered::allQueryCounts = new int *[k_mer_length];
+            for (int i = 0; i < k_mer_length; ++i)
+                layered::allQueryCounts[i] = new int[cluster_information::numberOfKmers[i]];
+            clusterSort(0, numberOfInputSequences, 0, spectrumIndexes);
+            remainingAtLastDbUpdate = numberOfInputSequences;
         } // if (! noKmerFilter)
 
         if (noKmerFilter) 
@@ -1017,7 +753,7 @@ int main(int argc, char *argv[])
                                 } // if (i < j)
                             } // while (i < j)
                             remainingAtLastDbUpdate = numberOfInputSequences - numberOfMarked;    
-                            clusterSort(0, remainingAtLastDbUpdate, 0);
+                            clusterSort(0, remainingAtLastDbUpdate, 0, spectrumIndexes);
                         } // if (! noKmerFilter)
                         else 
                         { // No k-mer filter
@@ -1068,5 +804,4 @@ int main(int argc, char *argv[])
             } // if (!marked[lexicographicIndex])
         } // for (Index i = 0; i < numberOfInputSequences; ++i)
         return EXIT_SUCCESS;
-    }
 } // main

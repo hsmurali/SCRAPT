@@ -27,6 +27,7 @@ fasta.o: src/fasta.cpp src/fasta.hpp
 	$(CXX) -c $(CXXFLAGS) src/fasta.cpp
 
 clean:
+	rm -rf bin
 	mkdir bin
 	mv dnaclust bin/
 	mv fastaselect bin/
